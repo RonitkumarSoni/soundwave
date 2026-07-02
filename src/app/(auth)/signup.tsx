@@ -61,11 +61,19 @@ export default function SignupScreen() {
 
   const handleSignup = async () => {
     if (!email || !password || !displayName) {
-      Alert.alert('Error', 'Please fill in all fields');
+      if (Platform.OS === 'web') {
+        setAlertConfig({ visible: true, title: 'Missing Fields', message: 'Please fill in all fields to create your account.' });
+      } else {
+        Alert.alert('Missing Fields', 'Please fill in all fields to create your account.');
+      }
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      if (Platform.OS === 'web') {
+        setAlertConfig({ visible: true, title: 'Weak Password', message: 'Password must be at least 6 characters for your security.' });
+      } else {
+        Alert.alert('Weak Password', 'Password must be at least 6 characters for your security.');
+      }
       return;
     }
     try {

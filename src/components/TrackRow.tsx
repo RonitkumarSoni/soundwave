@@ -28,12 +28,25 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
 
   const isCurrentTrack = currentTrack?.id === track.id;
 
-  const handlePlay = () => {
+  const handlePlay = async () => {
     setTrack(track);
-    if (contextQueue && contextQueue.length > 0) {
+    if (contextQueue && contextQueue.length > 1) {
       setQueue(contextQueue);
     } else {
-      setQueue([track]);
+      // Auto-populate queue with popular tracks so Up Next has content
+      try {
+        const { api } = require('@/lib/api');
+        const popular = await api.getPopular(20, 0);
+        if (popular.length > 0) {
+          // Put current track first, then fill with popular tracks (excluding duplicates)
+          const others = popular.filter((t: Track) => t.id !== track.id);
+          setQueue([track, ...others]);
+        } else {
+          setQueue([track]);
+        }
+      } catch {
+        setQueue([track]);
+      }
     }
   };
 

@@ -4,6 +4,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Use environment variable for API URL in production, fallback to Render backend
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || "https://soundwave-backend-p4y0.onrender.com/api";
 
+// Retry helper for Render cold start
+const withRetry = async <T>(fn: () => Promise<T>, retries = 2, delay = 2000): Promise<T> => {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const isLastAttempt = i === retries;
+      const isNetworkError = !err.response || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK';
+      if (isLastAttempt || !isNetworkError) throw err;
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw new Error('Request failed after retries');
+};
+
 const apiClient = axios.create({
   baseURL: API_BASE,
   timeout: 10000,
@@ -21,16 +36,22 @@ apiClient.interceptors.request.use(async (config) => {
 export const api = {
   auth: {
     login: async (email: string, password: string) => {
-      const { data } = await apiClient.post('/auth/login', { email, password });
-      return data;
+      return withRetry(async () => {
+        const { data } = await apiClient.post('/auth/login', { email, password });
+        return data;
+      });
     },
     signup: async (email: string, password: string, display_name: string) => {
-      const { data } = await apiClient.post('/auth/signup', { email, password, display_name });
-      return data;
+      return withRetry(async () => {
+        const { data } = await apiClient.post('/auth/signup', { email, password, display_name });
+        return data;
+      });
     },
     googleLogin: async (id_token: string) => {
-      const { data } = await apiClient.post('/auth/google', { id_token });
-      return data;
+      return withRetry(async () => {
+        const { data } = await apiClient.post('/auth/google', { id_token });
+        return data;
+      });
     },
     updateProfile: async (display_name?: string, avatar_url?: string) => {
       const { data } = await apiClient.patch('/auth/profile', { display_name, avatar_url });

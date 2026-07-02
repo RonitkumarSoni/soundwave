@@ -13,6 +13,8 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, gradients, spacing, borderRadius } from "@/theme/colors";
 import { promoCards, PromoCard } from "@/data/mockData";
+import { api } from "@/lib/api";
+import { usePlayerStore } from "@/stores/usePlayerStore";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 // Limit max width so images aren't stretched into very wide panoramas on web
@@ -24,6 +26,20 @@ export function ForYouCarousel() {
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const isDragging = useRef(false);
+  const setTrack = usePlayerStore((s) => s.setTrack);
+  const setQueue = usePlayerStore((s) => s.setQueue);
+
+  const handleCtaPress = async (searchQuery: string) => {
+    try {
+      const tracks = await api.search(searchQuery);
+      if (tracks.length > 0) {
+        setTrack(tracks[0]);
+        setQueue(tracks);
+      }
+    } catch (e) {
+      console.error('Carousel CTA error:', e);
+    }
+  };
 
   // Autoplay effect
   useEffect(() => {
@@ -77,7 +93,7 @@ export function ForYouCarousel() {
             </Text>
           </View>
 
-          <TouchableOpacity style={styles.ctaButton} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.ctaButton} activeOpacity={0.7} onPress={() => handleCtaPress(item.searchQuery)}>
             <Text style={styles.ctaText}>{item.cta}</Text>
           </TouchableOpacity>
         </View>

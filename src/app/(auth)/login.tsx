@@ -60,7 +60,11 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      if (Platform.OS === 'web') {
+        setAlertConfig({ visible: true, title: 'Missing Fields', message: 'Please enter your email and password to continue.' });
+      } else {
+        Alert.alert('Missing Fields', 'Please enter your email and password to continue.');
+      }
       return;
     }
     try {

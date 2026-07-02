@@ -86,7 +86,7 @@ export default function SettingsScreen() {
             user?.display_name || 'User', 
             user?.email, 
             <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
-            () => Alert.alert('Edit Profile', 'Profile editing coming soon')
+            () => {}
           )}
         </View>
 

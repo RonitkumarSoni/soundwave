@@ -65,7 +65,7 @@ export default function HomeScreen() {
       case "Hot Tracks":
         return "popularity_total";
       case "Editor's Picks":
-        return "buzz";
+        return "releasedate";
       case "All":
       default:
         return "popularity_week";

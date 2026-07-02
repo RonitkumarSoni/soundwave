@@ -17,6 +17,7 @@ export interface PromoCard {
   subtitle: string;
   cta: string;
   coverUrl: string;
+  searchQuery: string;
 }
 
 export interface Genre {
@@ -169,6 +170,7 @@ export const promoCards: PromoCard[] = [
     subtitle: "Explore trending tracks and hidden gems curated just for you.",
     cta: "Start Listening",
     coverUrl: "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSrIUuL70iHJSUbse38NnHrmgPJubRXQrtJ63QfCFZifVbgfLx_",
+    searchQuery: "pop",
   },
   {
     id: "promo_02",
@@ -176,6 +178,7 @@ export const promoCards: PromoCard[] = [
     subtitle: "Uplifting tracks to brighten your day and lift your spirits.",
     cta: "Play Now",
     coverUrl: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRbAoNXmgOqrPF2UxTQnB6G0wFUUilo6hxxG1rdL9CjEFcNpUBV",
+    searchQuery: "happy",
   },
   {
     id: "promo_04",
@@ -183,6 +186,7 @@ export const promoCards: PromoCard[] = [
     subtitle: "Get the energy going with high-tempo tracks and remixes.",
     cta: "Let's Party",
     coverUrl: "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTjzxXEGRgT2C-LYFs1soJyLJnVuHZ3bH0A3EnHigpGclIbLkS9",
+    searchQuery: "electronic",
   },
   {
     id: "promo_03",
@@ -190,6 +194,7 @@ export const promoCards: PromoCard[] = [
     subtitle: "Relax and unwind with the smoothest lo-fi and ambient beats.",
     cta: "Explore",
     coverUrl: `${coverBase}/chillvibes/400/200`,
+    searchQuery: "chill",
   },
 ];
 

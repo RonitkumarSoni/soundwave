@@ -18,11 +18,11 @@ import { colors, gradients, spacing, borderRadius } from "@/theme/colors";
 import { TrackRow } from "@/components/TrackRow";
 import { genres } from "@/data/mockData";
 import { api } from "@/lib/api";
-import { Track } from "@/stores/usePlayerStore";
+import { Track, usePlayerStore } from "@/stores/usePlayerStore";
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
-function AnimatedGenreCard({ genre }: { genre: any }) {
+function AnimatedGenreCard({ genre, onPress }: { genre: any; onPress: (name: string) => void }) {
   const hoverAnim = useRef(new Animated.Value(0)).current;
 
   const handleHoverIn = () => {
@@ -70,9 +70,9 @@ function AnimatedGenreCard({ genre }: { genre: any }) {
   return (
     <Pressable
       style={styles.genreCard}
+      onPress={() => onPress(genre.name)}
       onHoverIn={handleHoverIn}
       onHoverOut={handleHoverOut}
-      // TypeScript might complain about onHoverIn/Out on standard Pressable type, so we can cast it if needed, but it works on Web.
       {...({ onMouseEnter: handleHoverIn, onMouseLeave: handleHoverOut } as any)}
     >
       <LinearGradient
@@ -95,7 +95,10 @@ export default function SearchScreen() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
+  const [genreLoading, setGenreLoading] = useState(false);
   const insets = useSafeAreaInsets();
+  const setTrack = usePlayerStore((s) => s.setTrack);
+  const setQueue = usePlayerStore((s) => s.setQueue);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -116,6 +119,23 @@ export default function SearchScreen() {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
   }, [query]);
+
+  const handleGenrePress = async (genreName: string) => {
+    setGenreLoading(true);
+    setQuery(genreName);
+    try {
+      const tracks = await api.search(genreName);
+      setResults(tracks);
+      if (tracks.length > 0) {
+        setTrack(tracks[0]);
+        setQueue(tracks);
+      }
+    } catch (e) {
+      console.error('Genre search error:', e);
+    } finally {
+      setGenreLoading(false);
+    }
+  };
 
   return (
     <LinearGradient
@@ -159,10 +179,13 @@ export default function SearchScreen() {
         {/* Show results or genres */}
         {query.trim() ? (
           <View>
-            {results.map((track, index) => (
+            {loading && (
+              <ActivityIndicator size="small" color={colors.accentSolid} style={{ marginTop: 20 }} />
+            )}
+            {!loading && results.map((track, index) => (
               <TrackRow key={track.id} track={track} index={index} contextQueue={results} />
             ))}
-            {results.length === 0 && (
+            {!loading && results.length === 0 && (
               <View style={styles.emptyState}>
                 <Ionicons
                   name="search-outline"
@@ -170,16 +193,22 @@ export default function SearchScreen() {
                   color={colors.tertiaryLabel}
                 />
                 <Text style={styles.emptyText}>No results found</Text>
+                <Text style={styles.emptyHint}>
+                  We use royalty-free music from Jamendo.{"\n"}Try searching for "rock", "pop", "chill", "electronic"{"\n"}or artists like "Moby", "Jahzzar", "Dee Yan-Key"
+                </Text>
               </View>
             )}
           </View>
         ) : (
           <View>
+            {genreLoading && (
+              <ActivityIndicator size="large" color={colors.accentSolid} style={{ marginTop: 40 }} />
+            )}
             {/* Genre Grid */}
             <Text style={styles.sectionTitle}>Browse genres</Text>
             <View style={styles.genreGrid}>
               {genres.map((genre) => (
-                <AnimatedGenreCard key={genre.id} genre={genre} />
+                <AnimatedGenreCard key={genre.id} genre={genre} onPress={handleGenrePress} />
               ))}
             </View>
           </View>
@@ -272,6 +301,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 60,
     gap: spacing.md,
+  },
+  emptyHint: {
+    fontSize: 13,
+    color: colors.tertiaryLabel,
+    textAlign: "center",
+    lineHeight: 20,
+    paddingHorizontal: spacing.xl,
   },
   emptyText: {
     fontSize: 16,
