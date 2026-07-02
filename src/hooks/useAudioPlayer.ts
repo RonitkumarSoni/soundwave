@@ -130,8 +130,14 @@ export function useAudioPlayer() {
   const onPlaybackStatusUpdate = (status: any) => {
     if (status.isLoaded) {
       if (status.didJustFinish) {
-        // Track finished, go to next
-        nextTrack();
+        const state = usePlayerStore.getState();
+        if (state.repeatMode === "one") {
+          seekGlobalAudio(0);
+          soundInstance?.playAsync();
+        } else {
+          // Track finished, go to next
+          nextTrack();
+        }
       } else {
         // Update progress
         const currentMs = status.positionMillis;

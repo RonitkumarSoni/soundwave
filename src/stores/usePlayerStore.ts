@@ -54,16 +54,40 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setCurrentTime: (ms) => set({ currentTimeMs: ms }),
 
   nextTrack: () => {
-    const { queue, currentTrack } = get();
+    const { queue, currentTrack, isShuffled } = get();
     if (!currentTrack || queue.length === 0) return;
+    
+    if (isShuffled && queue.length > 1) {
+      let randomIndex = Math.floor(Math.random() * queue.length);
+      const currentIdx = queue.findIndex((t) => t.id === currentTrack.id);
+      if (randomIndex === currentIdx) {
+        randomIndex = (randomIndex + 1) % queue.length;
+      }
+      const next = queue[randomIndex];
+      set({ currentTrack: next, progress: 0, currentTimeMs: 0, isPlaying: true });
+      return;
+    }
+
     const idx = queue.findIndex((t) => t.id === currentTrack.id);
     const next = queue[(idx + 1) % queue.length];
     set({ currentTrack: next, progress: 0, currentTimeMs: 0, isPlaying: true });
   },
 
   prevTrack: () => {
-    const { queue, currentTrack } = get();
+    const { queue, currentTrack, isShuffled } = get();
     if (!currentTrack || queue.length === 0) return;
+
+    if (isShuffled && queue.length > 1) {
+      let randomIndex = Math.floor(Math.random() * queue.length);
+      const currentIdx = queue.findIndex((t) => t.id === currentTrack.id);
+      if (randomIndex === currentIdx) {
+        randomIndex = (randomIndex + 1) % queue.length;
+      }
+      const prev = queue[randomIndex];
+      set({ currentTrack: prev, progress: 0, currentTimeMs: 0, isPlaying: true });
+      return;
+    }
+
     const idx = queue.findIndex((t) => t.id === currentTrack.id);
     const prev = queue[(idx - 1 + queue.length) % queue.length];
     set({ currentTrack: prev, progress: 0, currentTimeMs: 0, isPlaying: true });

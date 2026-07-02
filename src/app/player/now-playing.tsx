@@ -207,12 +207,17 @@ export default function NowPlayingScreen() {
           <Ionicons name="play-skip-forward" size={28} color="#FFF" />
         </TouchableOpacity>
 
-        <TouchableOpacity activeOpacity={0.7} onPress={() => setQueueVisible(true)}>
+        <TouchableOpacity activeOpacity={0.7} onPress={toggleRepeat}>
           <Feather
-            name="list"
+            name="repeat"
             size={24}
-            color="rgba(255,255,255,0.7)"
+            color={repeatMode !== "off" ? "#FFF" : "rgba(255,255,255,0.5)"}
           />
+          {repeatMode === "one" && (
+            <View style={{ position: "absolute", top: -5, right: -5, backgroundColor: "#FFF", borderRadius: 10, width: 14, height: 14, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 9, fontWeight: "bold", color: "#000" }}>1</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     </View>
