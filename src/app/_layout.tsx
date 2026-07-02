@@ -1,9 +1,10 @@
 import React, { useState, useCallback } from "react";
-import { View, StyleSheet, Platform } from "react-native";
+import { View, Text, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Tabs, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { BottomNav } from "@/components/BottomNav";
+import { Ionicons } from "@expo/vector-icons";
 import { MiniPlayer } from "@/components/MiniPlayer";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 import { useAuthStore } from "@/stores/useAuthStore";
