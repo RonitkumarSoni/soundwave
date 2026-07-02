@@ -16,6 +16,8 @@ export function Waveform({
   totalTime,
   onSeek,
 }: WaveformProps) {
+  const [containerWidth, setContainerWidth] = React.useState(300);
+
   // Generate random bar heights for visual waveform effect
   const bars = useMemo(() => {
     const count = 50;
@@ -31,11 +33,8 @@ export function Waveform({
 
   const handlePress = (event: any) => {
     const { locationX } = event.nativeEvent;
-    const containerWidth = event.nativeEvent.target
-      ? event.currentTarget?.offsetWidth
-      : 300;
-    // rough seek based on touch position
-    const seekPos = Math.max(0, Math.min(1, locationX / 300));
+    const width = containerWidth || 300;
+    const seekPos = Math.max(0, Math.min(1, locationX / width));
     onSeek(seekPos);
   };
 
@@ -44,6 +43,7 @@ export function Waveform({
       <View style={styles.waveformOuter}>
         <TouchableOpacity
           style={styles.waveformContainer}
+          onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
           onPress={handlePress}
           activeOpacity={0.9}
         >
@@ -53,7 +53,7 @@ export function Waveform({
             const barHeight = 4 + height * 28; // min 4, max 32
 
             return (
-              <View key={index} style={styles.barWrapper}>
+              <View key={index} style={styles.barWrapper} pointerEvents="none">
                 {isPlayed ? (
                   <View style={[styles.bar, { height: barHeight, backgroundColor: "#FFF" }]} />
                 ) : (
@@ -71,7 +71,7 @@ export function Waveform({
         </TouchableOpacity>
 
         {/* Scrubber Handle */}
-        <View style={[styles.scrubberHandle, { left: `${progress * 100}%` }]}>
+        <View style={[styles.scrubberHandle, { left: `${progress * 100}%` }]} pointerEvents="none">
           <View style={styles.scrubberLine} />
           <View style={styles.scrubberDot} />
         </View>
