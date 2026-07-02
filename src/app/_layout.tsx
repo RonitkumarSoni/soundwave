@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
 import { Tabs, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { BottomNav } from "@/components/BottomNav";
@@ -58,10 +58,21 @@ export default function RootLayout() {
   // If loading auth state, we can return null or a splash screen
   if (isLoading) return <View style={styles.container} />;
 
+  const globalCss = `
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover, 
+    input:-webkit-autofill:focus, 
+    input:-webkit-autofill:active {
+      transition: background-color 5000s ease-in-out 0s;
+      -webkit-text-fill-color: #fff !important;
+    }
+  `;
+
   // If not logged in, just render the stack so (auth) routes work without BottomNav
   if (!isLoggedIn) {
     return (
       <View style={styles.container}>
+        {Platform.OS === 'web' && <style dangerouslySetInnerHTML={{ __html: globalCss }} />}
         <StatusBar style="light" />
         <Tabs screenOptions={{ headerShown: false, tabBarStyle: { display: "none" } }}>
           <Tabs.Screen name="(auth)" options={{ title: "Auth" }} />
@@ -72,6 +83,7 @@ export default function RootLayout() {
 
   return (
     <View style={styles.container}>
+      {Platform.OS === 'web' && <style dangerouslySetInnerHTML={{ __html: globalCss }} />}
       <StatusBar style="light" />
       <Tabs
         screenOptions={{

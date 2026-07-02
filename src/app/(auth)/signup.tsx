@@ -40,10 +40,15 @@ export default function SignupScreen() {
       await setAuthData(data);
       router.replace('/(home)');
     } catch (err: any) {
+      let errorMsg = 'Unable to connect to our servers right now. Please try again later.';
       const msg = err.response?.data?.message;
-      const errorMsg = Array.isArray(msg) ? msg.join(', ') : msg || 'Google signup failed';
-      if (Platform.OS === 'web') window.alert('Error: ' + errorMsg);
-      else Alert.alert('Error', errorMsg);
+      if (msg && typeof msg === 'string' && !msg.startsWith('<')) {
+        errorMsg = msg;
+      } else if (Array.isArray(msg)) {
+        errorMsg = msg.join(', ');
+      }
+      if (Platform.OS === 'web') window.alert('Sign Up Failed\n\n' + errorMsg);
+      else Alert.alert('Sign Up Failed', errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -64,10 +69,19 @@ export default function SignupScreen() {
       await setAuthData(data);
       router.replace('/(home)');
     } catch (err: any) {
-      const msg = err.response?.data?.message;
-      const errorMsg = Array.isArray(msg) ? msg.join(', ') : msg || 'Signup failed';
-      if (Platform.OS === 'web') window.alert('Error: ' + errorMsg);
-      else Alert.alert('Error', errorMsg);
+      let errorMsg = 'Unable to connect to our servers right now. Please try again later.';
+      if (err.response?.status === 409) {
+        errorMsg = 'An account with this email already exists. Please log in instead.';
+      } else {
+        const msg = err.response?.data?.message;
+        if (msg && typeof msg === 'string' && !msg.startsWith('<')) {
+          errorMsg = msg;
+        } else if (Array.isArray(msg)) {
+          errorMsg = msg.join(', ');
+        }
+      }
+      if (Platform.OS === 'web') window.alert('Sign Up Failed\n\n' + errorMsg);
+      else Alert.alert('Sign Up Failed', errorMsg);
     } finally {
       setIsLoading(false);
     }

@@ -39,10 +39,15 @@ export default function LoginScreen() {
       await setAuthData(data);
       router.replace('/(home)');
     } catch (err: any) {
+      let errorMsg = 'Unable to connect to our servers right now. Please try again later.';
       const msg = err.response?.data?.message;
-      const errorMsg = Array.isArray(msg) ? msg.join(', ') : msg || 'Google login failed';
-      if (Platform.OS === 'web') window.alert('Error: ' + errorMsg);
-      else Alert.alert('Error', errorMsg);
+      if (msg && typeof msg === 'string' && !msg.startsWith('<')) {
+        errorMsg = msg;
+      } else if (Array.isArray(msg)) {
+        errorMsg = msg.join(', ');
+      }
+      if (Platform.OS === 'web') window.alert('Sign In Failed\n\n' + errorMsg);
+      else Alert.alert('Sign In Failed', errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -59,10 +64,19 @@ export default function LoginScreen() {
       await setAuthData(data);
       router.replace('/(home)');
     } catch (err: any) {
-      const msg = err.response?.data?.message;
-      const errorMsg = Array.isArray(msg) ? msg.join(', ') : msg || 'Login failed';
-      if (Platform.OS === 'web') window.alert('Error: ' + errorMsg);
-      else Alert.alert('Error', errorMsg);
+      let errorMsg = 'Unable to connect to our servers right now. Please try again later.';
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        errorMsg = 'Invalid email or password. Please check your credentials and try again.';
+      } else {
+        const msg = err.response?.data?.message;
+        if (msg && typeof msg === 'string' && !msg.startsWith('<')) {
+          errorMsg = msg;
+        } else if (Array.isArray(msg)) {
+          errorMsg = msg.join(', ');
+        }
+      }
+      if (Platform.OS === 'web') window.alert('Login Failed\n\n' + errorMsg);
+      else Alert.alert('Login Failed', errorMsg);
     } finally {
       setIsLoading(false);
     }
