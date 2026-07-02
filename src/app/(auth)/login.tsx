@@ -41,7 +41,7 @@ export default function LoginScreen() {
     } catch (err: any) {
       let errorMsg = 'Unable to connect to our servers right now. Please try again later.';
       const msg = err.response?.data?.message;
-      if (msg && typeof msg === 'string' && !msg.startsWith('<')) {
+      if (msg && typeof msg === 'string' && !msg.startsWith('<') && !msg.startsWith('Cannot ')) {
         errorMsg = msg;
       } else if (Array.isArray(msg)) {
         errorMsg = msg.join(', ');
@@ -69,7 +69,7 @@ export default function LoginScreen() {
         errorMsg = 'Invalid email or password. Please check your credentials and try again.';
       } else {
         const msg = err.response?.data?.message;
-        if (msg && typeof msg === 'string' && !msg.startsWith('<')) {
+        if (msg && typeof msg === 'string' && !msg.startsWith('<') && !msg.startsWith('Cannot ')) {
           errorMsg = msg;
         } else if (Array.isArray(msg)) {
           errorMsg = msg.join(', ');

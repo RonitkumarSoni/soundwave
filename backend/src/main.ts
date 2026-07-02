@@ -35,7 +35,7 @@ async function bootstrap() {
     else if (serviceName === 'gateway') port = 3001;
   }
 
-  if (serviceName !== 'gateway' && serviceName !== 'monolith') {
+  if (serviceName !== 'gateway') {
     app.setGlobalPrefix('api');
   }
 

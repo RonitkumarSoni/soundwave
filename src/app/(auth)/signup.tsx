@@ -42,7 +42,7 @@ export default function SignupScreen() {
     } catch (err: any) {
       let errorMsg = 'Unable to connect to our servers right now. Please try again later.';
       const msg = err.response?.data?.message;
-      if (msg && typeof msg === 'string' && !msg.startsWith('<')) {
+      if (msg && typeof msg === 'string' && !msg.startsWith('<') && !msg.startsWith('Cannot ')) {
         errorMsg = msg;
       } else if (Array.isArray(msg)) {
         errorMsg = msg.join(', ');
@@ -74,7 +74,7 @@ export default function SignupScreen() {
         errorMsg = 'An account with this email already exists. Please log in instead.';
       } else {
         const msg = err.response?.data?.message;
-        if (msg && typeof msg === 'string' && !msg.startsWith('<')) {
+        if (msg && typeof msg === 'string' && !msg.startsWith('<') && !msg.startsWith('Cannot ')) {
           errorMsg = msg;
         } else if (Array.isArray(msg)) {
           errorMsg = msg.join(', ');
