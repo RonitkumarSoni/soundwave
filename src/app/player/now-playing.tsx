@@ -10,6 +10,7 @@ import {
   Platform,
   Modal,
   ScrollView,
+  Share,
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -85,6 +86,21 @@ export default function NowPlayingScreen() {
     toggleLike();
   };
 
+  const handleShare = async () => {
+    try {
+      const url = "https://soundwave-studio-app.vercel.app/";
+      const message = `Listen to "${track.name}" by ${track.artist_name} on Soundwave! 🎵\n${url}`;
+      
+      await Share.share({
+        message,
+        url,
+        title: "Share Song",
+      });
+    } catch (error: any) {
+      console.error("Error sharing:", error.message);
+    }
+  };
+
   // Format time
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -135,7 +151,7 @@ export default function NowPlayingScreen() {
 
         <Text style={styles.topBarTitle}>Now Playing</Text>
 
-        <TouchableOpacity style={styles.topBarButton} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.topBarButton} activeOpacity={0.7} onPress={handleShare}>
           <Feather name="share" size={20} color="#FFF" />
         </TouchableOpacity>
       </View>
