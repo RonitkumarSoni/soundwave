@@ -16,6 +16,7 @@ export const seekGlobalAudio = async (position: number) => {
   }
 };
 
+export function useAudioPlayer() {
   const {
     currentTrack,
     isPlaying,
