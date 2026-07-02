@@ -1,8 +1,8 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Use environment variable for API URL in production, fallback to localhost for development
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001/api";
+// Use environment variable for API URL in production, fallback to Render backend
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || "https://soundwave-backend-p4y0.onrender.com/api";
 
 const apiClient = axios.create({
   baseURL: API_BASE,
