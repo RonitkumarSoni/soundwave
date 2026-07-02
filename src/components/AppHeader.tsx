@@ -10,7 +10,7 @@ import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { colors, spacing } from "@/theme/colors";
-import { currentUser } from "@/data/mockData";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 interface AppHeaderProps {
   mode: "greeting" | "plain";
@@ -19,18 +19,40 @@ interface AppHeaderProps {
 
 export function AppHeader({ mode, title }: AppHeaderProps) {
   const router = useRouter();
+  const { user } = useAuthStore();
+  
+  const userName = user?.display_name || "User";
   const displayTitle =
-    mode === "greeting" ? `Hello, ${currentUser.name}` : title || "Your library";
+    mode === "greeting" ? `Hello, ${userName}` : title || "Your library";
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .substring(0, 2);
+  };
 
   return (
     <View style={styles.container}>
       {/* Top row: avatar + icon buttons */}
       <View style={styles.topRow}>
-        <TouchableOpacity activeOpacity={0.7}>
-          <Image
-            source={{ uri: currentUser.avatarUrl }}
-            style={styles.avatar}
-          />
+        <TouchableOpacity 
+          activeOpacity={0.7} 
+          onPress={() => router.navigate("/(settings)")}
+          style={styles.avatarContainer}
+        >
+          {user?.avatar_url ? (
+            <Image
+              source={{ uri: user.avatar_url }}
+              style={styles.avatar}
+            />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>{getInitials(userName)}</Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         <View style={styles.iconButtons}>
@@ -78,6 +100,26 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     backgroundColor: colors.surface,
+  },
+  avatarContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+  },
+  avatarPlaceholder: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "bold",
+    letterSpacing: 1,
   },
   iconButtons: {
     flexDirection: "row",
