@@ -5,8 +5,16 @@ import { usePlayerStore, Track } from "@/stores/usePlayerStore";
 
 const isWeb = Platform.OS === "web";
 
-let soundInstance: Audio.Sound | null = null;
-// Custom WebAudio removed, using Expo Audio for all platforms
+export let soundInstance: Audio.Sound | null = null;
+
+export const seekGlobalAudio = async (position: number) => {
+  const { currentTrack, setProgress } = usePlayerStore.getState();
+  setProgress(position);
+  if (currentTrack && soundInstance) {
+    const durationMs = currentTrack.duration * 1000;
+    await soundInstance.setPositionAsync(position * durationMs);
+  }
+};
 
 export function useAudioPlayer() {
   const {

@@ -24,6 +24,7 @@ import Animated, {
 import { colors, gradients, spacing, borderRadius } from "@/theme/colors";
 import { Waveform } from "@/components/Waveform";
 import { usePlayerStore } from "@/stores/usePlayerStore";
+import { seekGlobalAudio } from "@/hooks/useAudioPlayer";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const COVER_SIZE = SCREEN_WIDTH * 0.75;
@@ -170,7 +171,7 @@ export default function NowPlayingScreen() {
           progress={progress}
           currentTime={currentTime}
           totalTime={totalTime}
-          onSeek={setProgress}
+          onSeek={seekGlobalAudio}
         />
       </View>
 
