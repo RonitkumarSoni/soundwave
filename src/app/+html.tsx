@@ -25,6 +25,25 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta property="twitter:title" content="Soundwave — Premium Music Player" />
         <meta property="twitter:description" content="Discover, stream, and enjoy your favorite music with Soundwave. A premium listening experience." />
         <meta property="twitter:image" content="https://soundwave-studio-app.vercel.app/og-image.jpg" />
+        
+        {/* Advanced SEO */}
+        <meta name="keywords" content="music player, free music streaming, listen to music online, premium music app, soundwave app, online audio player" />
+        <link rel="canonical" href="https://soundwave-studio-app.vercel.app/" />
+
+        {/* JSON-LD Structured Data */}
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          "name": "Soundwave",
+          "operatingSystem": "Web, Android, iOS",
+          "applicationCategory": "MultimediaApplication",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "description": "Discover, stream, and enjoy your favorite music with Soundwave. A premium listening experience."
+        }) }} />
 
         {/*
           Disable body scrolling on web. This makes ScrollView components work closer to how they do on native.
