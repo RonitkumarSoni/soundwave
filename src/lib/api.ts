@@ -33,6 +33,42 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Response interceptor to handle token refresh
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const refreshToken = await AsyncStorage.getItem('refresh_token');
+        if (!refreshToken) {
+          throw new Error('No refresh token available');
+        }
+        
+        // Call refresh endpoint directly using axios to avoid interceptor loop
+        const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refresh_token: refreshToken });
+        
+        // Save new access token
+        await AsyncStorage.setItem('access_token', data.access_token);
+        
+        // Update authorization header for retry
+        originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
+        
+        return apiClient(originalRequest);
+      } catch (refreshError) {
+        // If refresh fails, clear auth state so user can log in again
+        await AsyncStorage.removeItem('access_token');
+        await AsyncStorage.removeItem('refresh_token');
+        await AsyncStorage.removeItem('user_profile');
+        // Let the application layer handle the logout (e.g. useAuthStore)
+        return Promise.reject(refreshError);
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const api = {
   auth: {
     login: async (email: string, password: string) => {

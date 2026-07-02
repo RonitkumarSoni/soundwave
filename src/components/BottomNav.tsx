@@ -23,6 +23,7 @@ interface BottomNavProps {
 
 const tabs = [
   { icon: "home" as const, iconOutline: "home-outline" as const, label: "Home" },
+  { icon: "search" as const, iconOutline: "search-outline" as const, label: "Search" },
   { icon: "musical-notes" as const, iconOutline: "musical-notes-outline" as const, label: "Library" },
   { icon: "settings" as const, iconOutline: "settings-outline" as const, label: "Settings" },
 ];

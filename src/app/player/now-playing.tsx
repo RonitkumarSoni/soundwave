@@ -37,7 +37,7 @@ export default function NowPlayingScreen() {
 
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const isLiked = usePlayerStore((s) => s.isLiked);
+  const likedTracks = usePlayerStore((s) => s.likedTracks);
   const isShuffled = usePlayerStore((s) => s.isShuffled);
   const repeatMode = usePlayerStore((s) => s.repeatMode);
   const progress = usePlayerStore((s) => s.progress);
@@ -76,12 +76,14 @@ export default function NowPlayingScreen() {
   const prevTrackData = queue.length > 1 ? queue[(currentIdx - 1 + queue.length) % queue.length] : null;
   const nextTrackData = queue.length > 1 ? queue[(currentIdx + 1) % queue.length] : null;
 
+  const isLiked = likedTracks.some(t => t.id === track.id);
+
   const handleLike = () => {
     heartScale.value = withSpring(1.3, { damping: 5, stiffness: 200 });
     setTimeout(() => {
       heartScale.value = withSpring(1);
     }, 150);
-    toggleLike();
+    toggleLike(track);
   };
 
   const handleShare = async () => {

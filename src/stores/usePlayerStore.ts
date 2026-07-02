@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface Track {
   id: string;
@@ -9,6 +10,7 @@ export interface Track {
   image: string;
   audio: string;
   audiodownload?: string;
+  source?: string;
 }
 
 interface PlayerState {
@@ -20,7 +22,7 @@ interface PlayerState {
   currentTimeMs: number;
   isShuffled: boolean;
   repeatMode: "off" | "all" | "one";
-  isLiked: boolean;
+  likedTracks: Track[];
 
   setTrack: (track: Track) => void;
   togglePlay: () => void;
@@ -32,8 +34,9 @@ interface PlayerState {
   prevTrack: () => void;
   toggleShuffle: () => void;
   toggleRepeat: () => void;
-  toggleLike: () => void;
+  toggleLike: (track: Track) => void;
   setQueue: (tracks: Track[]) => void;
+  initLikedTracks: () => Promise<void>;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -45,7 +48,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentTimeMs: 0,
   isShuffled: false,
   repeatMode: "off",
-  isLiked: false,
+  likedTracks: [],
 
   setTrack: (track) =>
     set({ currentTrack: track, isPlaying: true, progress: 0, currentTimeMs: 0 }),
@@ -110,7 +113,25 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       repeatMode:
         s.repeatMode === "off" ? "all" : s.repeatMode === "all" ? "one" : "off",
     })),
-  toggleLike: () => set((s) => ({ isLiked: !s.isLiked })),
+  toggleLike: (track) => {
+    const { likedTracks } = get();
+    const isLiked = likedTracks.some(t => t.id === track.id);
+    const newLiked = isLiked
+      ? likedTracks.filter(t => t.id !== track.id)
+      : [track, ...likedTracks];
+    set({ likedTracks: newLiked });
+    AsyncStorage.setItem('liked_tracks_full', JSON.stringify(newLiked)).catch(console.error);
+  },
+  initLikedTracks: async () => {
+    try {
+      const stored = await AsyncStorage.getItem('liked_tracks_full');
+      if (stored) {
+        set({ likedTracks: JSON.parse(stored) });
+      }
+    } catch (e) {
+      console.error('Failed to load liked tracks', e);
+    }
+  },
   setQueue: (tracks) => {
     const { isShuffled } = get();
     if (isShuffled) {

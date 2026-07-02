@@ -7,6 +7,14 @@ import { BottomNav } from "@/components/BottomNav";
 import { MiniPlayer } from "@/components/MiniPlayer";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useSettingsStore } from "@/stores/useSettingsStore";
+import { usePlayerStore } from "@/stores/usePlayerStore";
+
+if (!__DEV__) {
+  console.log = () => {};
+  console.warn = () => {};
+  console.error = () => {};
+}
 
 export default function RootLayout() {
   // Initialize audio player
@@ -16,6 +24,33 @@ export default function RootLayout() {
   const [activeTab, setActiveTab] = useState(0);
 
   const { isLoggedIn, isLoading, loadFromStorage } = useAuthStore();
+  const initSettings = useSettingsStore((s) => s.initSettings);
+  const initLikedTracks = usePlayerStore((s) => s.initLikedTracks);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
+
+  // Keyboard shortcuts (web only)
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input or textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePlay]);
+
+  React.useEffect(() => {
+    initSettings();
+    initLikedTracks();
+  }, []);
 
   React.useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -53,9 +88,12 @@ export default function RootLayout() {
           router.navigate("/(home)");
           break;
         case 1:
-          router.navigate("/(library)");
+          router.navigate("/(search)");
           break;
         case 2:
+          router.navigate("/(library)");
+          break;
+        case 3:
           router.navigate("/(settings)");
           break;
       }
@@ -63,8 +101,26 @@ export default function RootLayout() {
     [router]
   );
 
+  // Sync activeTab with current segment
+  React.useEffect(() => {
+    const segment = segments[0];
+    if (segment === '(home)') setActiveTab(0);
+    else if (segment === '(search)') setActiveTab(1);
+    else if (segment === '(library)') setActiveTab(2);
+    else if (segment === '(settings)') setActiveTab(3);
+  }, [segments]);
+
+
   // If loading auth state, we can return null or a splash screen
-  if (isLoading) return <View style={styles.container} />;
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A0514', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name="musical-notes" size={80} color="#B06AB3" style={{ marginBottom: 20 }} />
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFF', marginBottom: 40, letterSpacing: 2 }}>SOUNDWAVE</Text>
+        <ActivityIndicator size="large" color="#B06AB3" />
+      </View>
+    );
+  }
 
   const globalCss = `
     input:-webkit-autofill,

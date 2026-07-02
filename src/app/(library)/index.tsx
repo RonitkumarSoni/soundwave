@@ -8,22 +8,27 @@ import { FilterChips } from "@/components/FilterChips";
 import { TrackRow } from "@/components/TrackRow";
 import { libraryTabs } from "@/data/mockData";
 import { api } from "@/lib/api";
-import { Track } from "@/stores/usePlayerStore";
+import { Track, usePlayerStore } from "@/stores/usePlayerStore";
 
 export default function LibraryScreen() {
   const [activeTab, setActiveTab] = useState("All");
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const insets = useSafeAreaInsets();
+  const likedTracks = usePlayerStore((s) => s.likedTracks);
 
   useEffect(() => {
     const loadData = async () => {
-      const data = await api.getLibrary();
-      setTracks(data);
+      setLoading(true);
+      if (activeTab === "Liked Songs" || activeTab === "All") {
+        setTracks(likedTracks);
+      } else {
+        setTracks([]);
+      }
       setLoading(false);
     };
     loadData();
-  }, []);
+  }, [activeTab, likedTracks]);
 
   return (
     <LinearGradient
@@ -51,10 +56,18 @@ export default function LibraryScreen() {
         {/* Track List */}
         {loading ? (
           <ActivityIndicator size="large" color={colors.accentSolid} style={{ marginTop: 20 }} />
-        ) : (
+        ) : activeTab === "Playlists" || activeTab === "Downloads" ? (
+          <View style={{ alignItems: 'center', marginTop: 40 }}>
+            <Text style={{ color: 'rgba(255,255,255,0.7)' }}>Coming Soon</Text>
+          </View>
+        ) : tracks.length > 0 ? (
           tracks.map((track, index) => (
             <TrackRow key={track.id} track={track} index={index} showDuration contextQueue={tracks} />
           ))
+        ) : (
+          <View style={{ alignItems: 'center', marginTop: 40 }}>
+            <Text style={{ color: 'rgba(255,255,255,0.7)' }}>No liked songs yet.</Text>
+          </View>
         )}
       </ScrollView>
     </LinearGradient>

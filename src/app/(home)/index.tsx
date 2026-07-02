@@ -35,6 +35,7 @@ export default function HomeScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [isSlowWakeup, setIsSlowWakeup] = useState(false);
   const insets = useSafeAreaInsets();
   
   const setTrack = usePlayerStore((s) => s.setTrack);
@@ -74,18 +75,27 @@ export default function HomeScreen() {
 
   const loadInitialData = async (filter: string) => {
     setLoading(true);
+    setIsSlowWakeup(false);
     setOffset(0);
     setHasMore(true);
 
-    if (filter === "New Artists") {
-      const artists = await api.getArtists(10, 0);
-      setListData(artists);
-    } else {
-      const order = getOrderParam(filter);
-      const tracks = await api.getPopular(10, 0, order);
-      setListData(tracks);
+    const wakeTimeout = setTimeout(() => {
+      setIsSlowWakeup(true);
+    }, 5000);
+
+    try {
+      if (filter === "New Artists") {
+        const artists = await api.getArtists(10, 0);
+        setListData(artists);
+      } else {
+        const order = getOrderParam(filter);
+        const tracks = await api.getPopular(10, 0, order);
+        setListData(tracks);
+      }
+    } finally {
+      clearTimeout(wakeTimeout);
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const loadMoreData = async () => {
@@ -161,8 +171,13 @@ export default function HomeScreen() {
       style={styles.container}
     >
       {loading ? (
-        <View style={styles.centerContainer}>
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.accentSolid} />
+          {isSlowWakeup && (
+            <Text style={styles.slowWakeupText}>
+              Waking up free tier server... please wait ~30 seconds.
+            </Text>
+          )}
         </View>
       ) : (
         <FlatList
@@ -216,6 +231,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.secondaryLabel,
     fontWeight: "500",
+  },
+  footerLoader: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    marginTop: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  slowWakeupText: {
+    marginTop: 16,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   artistRow: {
     flexDirection: "row",
