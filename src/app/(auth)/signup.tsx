@@ -21,6 +21,7 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{ visible: boolean, title: string, message: string }>({ visible: false, title: '', message: '' });
 
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     clientId: '394758762438-q309rh1p5afvp52srr5nrc6lt3tepsfl.apps.googleusercontent.com',
@@ -48,8 +49,11 @@ export default function SignupScreen() {
       } else if (Array.isArray(msg)) {
         errorMsg = msg.join(', ');
       }
-      if (Platform.OS === 'web') window.alert('Sign Up Failed\n\n' + errorMsg);
-      else Alert.alert('Sign Up Failed', errorMsg);
+      if (Platform.OS === 'web') {
+        setAlertConfig({ visible: true, title: 'Sign Up Failed', message: errorMsg });
+      } else {
+        Alert.alert('Sign Up Failed', errorMsg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -81,8 +85,11 @@ export default function SignupScreen() {
           errorMsg = msg.join(', ');
         }
       }
-      if (Platform.OS === 'web') window.alert('Sign Up Failed\n\n' + errorMsg);
-      else Alert.alert('Sign Up Failed', errorMsg);
+      if (Platform.OS === 'web') {
+        setAlertConfig({ visible: true, title: 'Sign Up Failed', message: errorMsg });
+      } else {
+        Alert.alert('Sign Up Failed', errorMsg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -178,6 +185,19 @@ export default function SignupScreen() {
           </Link>
         </View>
       </View>
+
+      {Platform.OS === 'web' && alertConfig.visible && (
+        <View style={[StyleSheet.absoluteFill, { zIndex: 9999, justifyContent: 'center', alignItems: 'center' }]}>
+          <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.alertBox}>
+            <Text style={styles.alertTitle}>{alertConfig.title}</Text>
+            <Text style={styles.alertMessage}>{alertConfig.message}</Text>
+            <TouchableOpacity style={styles.alertButton} onPress={() => setAlertConfig({ ...alertConfig, visible: false })}>
+              <Text style={styles.alertButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -220,4 +240,38 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 40 },
   footerText: { color: 'rgba(255,255,255,0.7)', fontSize: 14 },
   footerLink: { color: colors.accentStart, fontSize: 14, fontWeight: '600' },
+  alertBox: {
+    backgroundColor: 'rgba(30, 30, 30, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    width: '80%',
+    maxWidth: 340,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  alertTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFF',
+    marginBottom: 12,
+  },
+  alertMessage: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.7)',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  alertButton: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+  },
+  alertButtonText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 15,
+  },
 });

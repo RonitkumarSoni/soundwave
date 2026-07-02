@@ -63,8 +63,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const isLastTrack = idx === queue.length - 1;
 
     if (isLastTrack && repeatMode === "off") {
-      // Stop playing if at the end of the queue and repeat is off
-      set({ isPlaying: false, progress: 0, currentTimeMs: 0 });
+      // Just loop back to the first track when manually pressing Next
+      const next = queue[0];
+      set({ currentTrack: next, progress: 0, currentTimeMs: 0, isPlaying: true });
       return;
     }
 
@@ -88,7 +89,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const newShuffled = !s.isShuffled;
     if (newShuffled) {
       const current = s.currentTrack;
-      const otherTracks = s.originalQueue.filter(t => t.id !== current?.id);
+      // If originalQueue is empty, fallback to current queue
+      const baseQueue = s.originalQueue.length > 0 ? s.originalQueue : s.queue;
+      const otherTracks = baseQueue.filter(t => t.id !== current?.id);
       for (let i = otherTracks.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
@@ -98,8 +101,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         queue: current ? [current, ...otherTracks] : otherTracks 
       };
     } else {
-      // Restore original queue, but try to keep current track
-      return { isShuffled: newShuffled, queue: s.originalQueue };
+      // Restore original queue if exists
+      return { isShuffled: newShuffled, queue: s.originalQueue.length > 0 ? s.originalQueue : s.queue };
     }
   }),
   toggleRepeat: () =>

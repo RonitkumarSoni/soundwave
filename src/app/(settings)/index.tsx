@@ -7,11 +7,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { colors, spacing } from '@/theme/colors';
+import { BlurView } from 'expo-blur';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuthStore();
   const settings = useSettingsStore();
+  const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
 
   useEffect(() => {
     settings.loadFromStorage();
@@ -19,10 +21,7 @@ export default function SettingsScreen() {
 
   const handleLogout = () => {
     if (Platform.OS === 'web') {
-      const confirmed = window.confirm('Are you sure you want to log out?');
-      if (confirmed) {
-        logout();
-      }
+      setShowLogoutConfirm(true);
     } else {
       Alert.alert('Log Out', 'Are you sure you want to log out?', [
         { text: 'Cancel', style: 'cancel' },
@@ -165,6 +164,25 @@ export default function SettingsScreen() {
 
         <Text style={styles.version}>Soundwave v1.0.0</Text>
       </ScrollView>
+
+      {/* Custom Logout Confirm Modal for Web */}
+      {Platform.OS === 'web' && showLogoutConfirm && (
+        <View style={[StyleSheet.absoluteFill, { zIndex: 9999, justifyContent: 'center', alignItems: 'center' }]}>
+          <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.alertBox}>
+            <Text style={styles.alertTitle}>Log Out</Text>
+            <Text style={styles.alertMessage}>Are you sure you want to log out?</Text>
+            <View style={styles.alertButtons}>
+              <TouchableOpacity style={styles.alertButtonCancel} onPress={() => setShowLogoutConfirm(false)}>
+                <Text style={styles.alertButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.alertButtonConfirm} onPress={() => { setShowLogoutConfirm(false); logout(); }}>
+                <Text style={styles.alertButtonTextConfirm}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -235,5 +253,56 @@ const styles = StyleSheet.create({
     marginTop: 40,
     fontSize: 13,
     color: 'rgba(255,255,255,0.3)',
+  },
+  alertBox: {
+    backgroundColor: 'rgba(30, 30, 30, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    width: '80%',
+    maxWidth: 340,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  alertTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFF',
+    marginBottom: 12,
+  },
+  alertMessage: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.7)',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  alertButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  alertButtonCancel: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+  },
+  alertButtonConfirm: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+  },
+  alertButtonTextCancel: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  alertButtonTextConfirm: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 15,
   },
 });
