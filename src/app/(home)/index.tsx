@@ -171,14 +171,7 @@ export default function HomeScreen() {
       style={styles.container}
     >
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accentSolid} />
-          {isSlowWakeup && (
-            <Text style={styles.slowWakeupText}>
-              Waking up free tier server... please wait ~30 seconds.
-            </Text>
-          )}
-        </View>
+        <View style={styles.loadingContainer} />
       ) : (
         <FlatList
           data={listData}

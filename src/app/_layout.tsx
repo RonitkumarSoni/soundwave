@@ -106,15 +106,8 @@ export default function RootLayout() {
   }, [segments]);
 
 
-  // If loading auth state, we can return null or a splash screen
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0A0514', alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name="musical-notes" size={80} color="#B06AB3" style={{ marginBottom: 20 }} />
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFF', marginBottom: 40, letterSpacing: 2 }}>SOUNDWAVE</Text>
-        <ActivityIndicator size="large" color="#B06AB3" />
-      </View>
-    );
+    return <View style={styles.container} />;
   }
 
   const globalCss = `
