@@ -21,7 +21,7 @@ const withRetry = async <T>(fn: () => Promise<T>, retries = 2, delay = 2000): Pr
 
 const apiClient = axios.create({
   baseURL: API_BASE,
-  timeout: 10000,
+  timeout: 60000, // Increased to 60 seconds for Render free tier cold start
 });
 
 // Interceptor to attach token
