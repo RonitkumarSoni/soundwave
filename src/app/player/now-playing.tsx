@@ -236,6 +236,13 @@ export default function NowPlayingScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Bottom Actions Row (Queue) */}
+      <View style={styles.bottomActionsRow}>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => setQueueVisible(true)}>
+          <Feather name="list" size={24} color="rgba(255,255,255,0.8)" />
+        </TouchableOpacity>
+      </View>
     </View>
 
       {/* Queue Modal */}
@@ -379,6 +386,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: spacing.xxl,
     marginBottom: spacing.xl,
+  },
+  bottomActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingHorizontal: spacing.xxl,
   },
   bigPlayButton: {
     width: 72,
