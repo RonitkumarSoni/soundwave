@@ -25,10 +25,16 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
   const setQueue = usePlayerStore((s) => s.setQueue);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const togglePlay = usePlayerStore((s) => s.togglePlay);
 
   const isCurrentTrack = currentTrack?.id === track.id;
 
   const handlePlay = async () => {
+    if (isCurrentTrack) {
+      togglePlay();
+      return;
+    }
+    
     setTrack(track);
     if (contextQueue && contextQueue.length > 1) {
       setQueue(contextQueue);
