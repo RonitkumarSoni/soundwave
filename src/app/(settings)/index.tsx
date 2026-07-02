@@ -7,7 +7,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { colors, spacing } from '@/theme/colors';
-import { BlurView } from 'expo-blur';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
