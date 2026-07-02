@@ -1,8 +1,8 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Ensure this matches the port your NestJS backend is running on
-const API_BASE = "http://localhost:3001/api";
+// Use environment variable for API URL in production, fallback to localhost for development
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3001/api";
 
 const apiClient = axios.create({
   baseURL: API_BASE,
