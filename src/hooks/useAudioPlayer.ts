@@ -60,7 +60,13 @@ export function useAudioPlayer() {
     let isCancelled = false;
 
     const loadNewTrack = async () => {
-      if (!currentTrack) return;
+      if (!currentTrack) {
+        if (soundInstance) {
+          await soundInstance.unloadAsync();
+          soundInstance = null;
+        }
+        return;
+      }
       
       // Determine correct audio URL based on source
       let audioUri = "";
@@ -71,7 +77,8 @@ export function useAudioPlayer() {
         console.error("Spotify tracks do not have audio available.");
         return;
       } else {
-        audioUri = currentTrack.audio;
+        // Fallback for Jamendo (sometimes audio stream is 404, audiodownload works better)
+        audioUri = currentTrack.audiodownload || currentTrack.audio;
       }
 
       if (!audioUri) {

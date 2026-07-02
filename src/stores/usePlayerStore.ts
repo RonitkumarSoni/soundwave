@@ -28,6 +28,7 @@ interface PlayerState {
   togglePlay: () => void;
   play: () => void;
   pause: () => void;
+  stop: () => void;
   setProgress: (progress: number) => void;
   setCurrentTime: (ms: number) => void;
   nextTrack: () => void;
@@ -55,6 +56,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   togglePlay: () => set((s) => ({ isPlaying: !s.isPlaying })),
   play: () => set({ isPlaying: true }),
   pause: () => set({ isPlaying: false }),
+  stop: () => set({ currentTrack: null, isPlaying: false, progress: 0, currentTimeMs: 0 }),
   setProgress: (progress) => set({ progress }),
   setCurrentTime: (ms) => set({ currentTimeMs: ms }),
 

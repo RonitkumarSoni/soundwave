@@ -85,6 +85,21 @@ export function MiniPlayer() {
                 color={colors.label}
               />
             </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                usePlayerStore.getState().stop();
+              }}
+              style={[styles.controlButton, { marginLeft: 4 }]}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="close"
+                size={24}
+                color={colors.label}
+              />
+            </TouchableOpacity>
           </View>
         </BlurView>
       </TouchableOpacity>
