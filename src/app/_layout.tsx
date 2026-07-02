@@ -11,12 +11,6 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { usePlayerStore } from "@/stores/usePlayerStore";
 
-if (!__DEV__) {
-  console.log = () => {};
-  console.warn = () => {};
-  console.error = () => {};
-}
-
 export default function RootLayout() {
   // Initialize audio player
   useAudioPlayer();
@@ -24,8 +18,8 @@ export default function RootLayout() {
   const segments = useSegments();
   const [activeTab, setActiveTab] = useState(0);
 
-  const { isLoggedIn, isLoading, loadFromStorage } = useAuthStore();
-  const initSettings = useSettingsStore((s) => s.initSettings);
+  const { isLoggedIn, isLoading, loadFromStorage: loadAuthFromStorage } = useAuthStore();
+  const loadSettingsFromStorage = useSettingsStore((s) => s.loadFromStorage);
   const initLikedTracks = usePlayerStore((s) => s.initLikedTracks);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
 
@@ -49,7 +43,7 @@ export default function RootLayout() {
   }, [togglePlay]);
 
   React.useEffect(() => {
-    initSettings();
+    loadSettingsFromStorage();
     initLikedTracks();
   }, []);
 
@@ -61,8 +55,8 @@ export default function RootLayout() {
         AsyncStorage.setItem('pending_play_id', playId);
       }
     }
-    loadFromStorage();
-  }, [loadFromStorage]);
+    loadAuthFromStorage();
+  }, [loadAuthFromStorage]);
 
   React.useEffect(() => {
     if (isLoading) return;
