@@ -11,6 +11,8 @@ import { ForYouCarousel } from "@/components/ForYouCarousel";
 import { TrackRow } from "@/components/TrackRow";
 import { filterChips } from "@/data/mockData";
 import { api } from "@/lib/api";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { usePlayerStore } from "@/stores/usePlayerStore";
 
 function ArtistRow({ artist }: { artist: any }) {
   return (
@@ -34,6 +36,28 @@ export default function HomeScreen() {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const insets = useSafeAreaInsets();
+  
+  const setTrack = usePlayerStore((s) => s.setTrack);
+  const setQueue = usePlayerStore((s) => s.setQueue);
+
+  useEffect(() => {
+    const handleDeepLink = async () => {
+      try {
+        const pendingId = await AsyncStorage.getItem('pending_play_id');
+        if (pendingId) {
+          await AsyncStorage.removeItem('pending_play_id');
+          const track = await api.getTrackById(pendingId);
+          if (track) {
+            setTrack(track);
+            setQueue([track]);
+          }
+        }
+      } catch (err) {
+        console.error("Deep link handling error:", err);
+      }
+    };
+    handleDeepLink();
+  }, []);
 
   // Map filters to Jamendo order parameters
   const getOrderParam = (filter: string) => {

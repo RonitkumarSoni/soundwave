@@ -88,7 +88,7 @@ export default function NowPlayingScreen() {
 
   const handleShare = async () => {
     try {
-      const url = "https://soundwave-studio-app.vercel.app/";
+      const url = `https://soundwave-studio-app.vercel.app/?play=${track.id}`;
       const message = `Listen to "${track.name}" by ${track.artist_name} on Soundwave! 🎵\n${url}`;
       
       await Share.share({

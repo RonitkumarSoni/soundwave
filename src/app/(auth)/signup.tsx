@@ -24,6 +24,7 @@ export default function SignupScreen() {
 
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     clientId: '394758762438-q309rh1p5afvp52srr5nrc6lt3tepsfl.apps.googleusercontent.com',
+    webClientId: '394758762438-q309rh1p5afvp52srr5nrc6lt3tepsfl.apps.googleusercontent.com',
   });
 
   React.useEffect(() => {

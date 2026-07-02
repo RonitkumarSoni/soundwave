@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { View, StyleSheet, Platform } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Tabs, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { BottomNav } from "@/components/BottomNav";
@@ -17,6 +18,13 @@ export default function RootLayout() {
   const { isLoggedIn, isLoading, loadFromStorage } = useAuthStore();
 
   React.useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      const playId = url.searchParams.get('play');
+      if (playId) {
+        AsyncStorage.setItem('pending_play_id', playId);
+      }
+    }
     loadFromStorage();
   }, [loadFromStorage]);
 

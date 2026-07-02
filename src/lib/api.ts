@@ -63,6 +63,16 @@ export const api = {
     }
   },
 
+  getTrackById: async (id: string) => {
+    try {
+      const { data } = await apiClient.get(`/catalog/tracks/${id}`);
+      return data;
+    } catch (error) {
+      console.error('getTrackById API error:', error);
+      return null;
+    }
+  },
+
   getPopular: async (limit = 10, offset = 0, order = 'popularity_week') => {
     try {
       const { data } = await apiClient.get('/catalog/tracks', { 
