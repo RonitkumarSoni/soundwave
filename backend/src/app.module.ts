@@ -35,7 +35,7 @@ const coreModules = [
           type: 'postgres',
           url: process.env.DATABASE_URL,
           autoLoadEntities: true,
-          synchronize: process.env.NODE_ENV !== 'production',
+          synchronize: true,
           ssl: { rejectUnauthorized: false },
           retryAttempts: 2,
           retryDelay: 2000,
