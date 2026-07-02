@@ -16,12 +16,12 @@ export const seekGlobalAudio = async (position: number) => {
   }
 };
 
-export function useAudioPlayer() {
   const {
     currentTrack,
     isPlaying,
     progress,
     currentTimeMs,
+    repeatMode,
     setTrack,
     togglePlay,
     play,
@@ -109,6 +109,16 @@ export function useAudioPlayer() {
     };
   }, [currentTrack?.id]); // Only re-run when track ID changes
 
+  // Update native loop mode when repeatMode changes
+  useEffect(() => {
+    const updateLoop = async () => {
+      if (soundInstance) {
+        await soundInstance.setIsLoopingAsync(repeatMode === "one");
+      }
+    };
+    updateLoop();
+  }, [repeatMode]);
+
   // Handle play/pause state changes from store
   useEffect(() => {
     const updatePlayState = async () => {
@@ -131,13 +141,11 @@ export function useAudioPlayer() {
     if (status.isLoaded) {
       if (status.didJustFinish) {
         const state = usePlayerStore.getState();
-        if (state.repeatMode === "one") {
-          seekGlobalAudio(0);
-          soundInstance?.playAsync();
-        } else {
+        if (state.repeatMode !== "one") {
           // Track finished, go to next
           nextTrack();
         }
+        // If repeatMode === 'one', Expo AV isLooping will handle it automatically
       } else {
         // Update progress
         const currentMs = status.positionMillis;
@@ -150,7 +158,13 @@ export function useAudioPlayer() {
 
   const playTrack = useCallback(
     (track: Track) => {
-      setTrack(track);
+      const { currentTrack, play } = usePlayerStore.getState();
+      if (currentTrack?.id === track.id) {
+        seekGlobalAudio(0);
+        play();
+      } else {
+        setTrack(track);
+      }
     },
     [setTrack]
   );

@@ -14,6 +14,7 @@ export interface Track {
 interface PlayerState {
   currentTrack: Track | null;
   queue: Track[];
+  originalQueue: Track[];
   isPlaying: boolean;
   progress: number;
   currentTimeMs: number;
@@ -38,6 +39,7 @@ interface PlayerState {
 export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentTrack: null,
   queue: [],
+  originalQueue: [],
   isPlaying: false,
   progress: 0,
   currentTimeMs: 0,
@@ -54,51 +56,69 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setCurrentTime: (ms) => set({ currentTimeMs: ms }),
 
   nextTrack: () => {
-    const { queue, currentTrack, isShuffled } = get();
+    const { queue, currentTrack, repeatMode } = get();
     if (!currentTrack || queue.length === 0) return;
     
-    if (isShuffled && queue.length > 1) {
-      let randomIndex = Math.floor(Math.random() * queue.length);
-      const currentIdx = queue.findIndex((t) => t.id === currentTrack.id);
-      if (randomIndex === currentIdx) {
-        randomIndex = (randomIndex + 1) % queue.length;
-      }
-      const next = queue[randomIndex];
-      set({ currentTrack: next, progress: 0, currentTimeMs: 0, isPlaying: true });
+    const idx = queue.findIndex((t) => t.id === currentTrack.id);
+    const isLastTrack = idx === queue.length - 1;
+
+    if (isLastTrack && repeatMode === "off") {
+      // Stop playing if at the end of the queue and repeat is off
+      set({ isPlaying: false, progress: 0, currentTimeMs: 0 });
       return;
     }
 
-    const idx = queue.findIndex((t) => t.id === currentTrack.id);
     const next = queue[(idx + 1) % queue.length];
+    
+    // If the queue has only 1 track and repeat is 'all', we just set it again.
+    // The useAudioPlayer hook will handle the seeking to 0.
     set({ currentTrack: next, progress: 0, currentTimeMs: 0, isPlaying: true });
   },
 
   prevTrack: () => {
-    const { queue, currentTrack, isShuffled } = get();
+    const { queue, currentTrack } = get();
     if (!currentTrack || queue.length === 0) return;
-
-    if (isShuffled && queue.length > 1) {
-      let randomIndex = Math.floor(Math.random() * queue.length);
-      const currentIdx = queue.findIndex((t) => t.id === currentTrack.id);
-      if (randomIndex === currentIdx) {
-        randomIndex = (randomIndex + 1) % queue.length;
-      }
-      const prev = queue[randomIndex];
-      set({ currentTrack: prev, progress: 0, currentTimeMs: 0, isPlaying: true });
-      return;
-    }
 
     const idx = queue.findIndex((t) => t.id === currentTrack.id);
     const prev = queue[(idx - 1 + queue.length) % queue.length];
     set({ currentTrack: prev, progress: 0, currentTimeMs: 0, isPlaying: true });
   },
 
-  toggleShuffle: () => set((s) => ({ isShuffled: !s.isShuffled })),
+  toggleShuffle: () => set((s) => {
+    const newShuffled = !s.isShuffled;
+    if (newShuffled) {
+      const current = s.currentTrack;
+      const otherTracks = s.originalQueue.filter(t => t.id !== current?.id);
+      for (let i = otherTracks.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
+      }
+      return { 
+        isShuffled: newShuffled, 
+        queue: current ? [current, ...otherTracks] : otherTracks 
+      };
+    } else {
+      // Restore original queue, but try to keep current track
+      return { isShuffled: newShuffled, queue: s.originalQueue };
+    }
+  }),
   toggleRepeat: () =>
     set((s) => ({
       repeatMode:
         s.repeatMode === "off" ? "all" : s.repeatMode === "all" ? "one" : "off",
     })),
   toggleLike: () => set((s) => ({ isLiked: !s.isLiked })),
-  setQueue: (tracks) => set({ queue: tracks }),
+  setQueue: (tracks) => {
+    const { isShuffled } = get();
+    if (isShuffled) {
+      const otherTracks = [...tracks];
+      for (let i = otherTracks.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
+      }
+      set({ queue: otherTracks, originalQueue: tracks });
+    } else {
+      set({ queue: tracks, originalQueue: tracks });
+    }
+  },
 }));
