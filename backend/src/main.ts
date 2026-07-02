@@ -26,13 +26,16 @@ async function bootstrap() {
     });
   }
 
-  let port = 3001;
-  if (serviceName === 'auth') port = 3002;
-  else if (serviceName === 'catalog') port = 3003;
-  else if (serviceName === 'stream') port = 3004;
-  else if (serviceName === 'gateway') port = 3001;
+  // When deployed, use the PORT env variable provided by the host (e.g. Render)
+  let port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
+  if (!process.env.PORT) {
+    if (serviceName === 'auth') port = 3002;
+    else if (serviceName === 'catalog') port = 3003;
+    else if (serviceName === 'stream') port = 3004;
+    else if (serviceName === 'gateway') port = 3001;
+  }
 
-  if (serviceName !== 'gateway') {
+  if (serviceName !== 'gateway' && serviceName !== 'monolith') {
     app.setGlobalPrefix('api');
   }
 
@@ -51,7 +54,8 @@ async function bootstrap() {
     app.use('/api/stream', createProxyMiddleware(proxyOptions(3004)));
   }
 
-  await app.listen(port);
-  console.log(`🚀 Soundwave ${serviceName.toUpperCase()} Service API running on http://localhost:${port}`);
+  // Bind to 0.0.0.0 to ensure it's accessible externally (required by Render and Docker)
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Soundwave ${serviceName.toUpperCase()} Service API running on http://0.0.0.0:${port}`);
 }
 bootstrap();
