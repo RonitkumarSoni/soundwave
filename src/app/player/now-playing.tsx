@@ -139,26 +139,11 @@ export default function NowPlayingScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Cover Art Carousel */}
+      {/* Cover Art */}
       <View style={styles.coverSection}>
-        <FlatList
-          data={carouselTracks}
-          renderItem={renderCoverItem}
-          keyExtractor={(item) => item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={COVER_SIZE + spacing.md}
-          decelerationRate="fast"
-          contentContainerStyle={{
-            paddingHorizontal: COVER_SPACING,
-          }}
-          initialScrollIndex={Math.max(0, currentIdx)}
-          getItemLayout={(_, index) => ({
-            length: COVER_SIZE + spacing.md,
-            offset: (COVER_SIZE + spacing.md) * index,
-            index,
-          })}
-        />
+        <View style={[styles.coverItemWrapper, { marginRight: 0 }]}>
+          <Image source={{ uri: track.image }} style={styles.coverImage} />
+        </View>
       </View>
 
       {/* Track Info + Like */}

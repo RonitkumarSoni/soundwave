@@ -47,8 +47,9 @@ export function useAudioPlayer() {
     };
   }, []);
 
-  // Handle track changes
   useEffect(() => {
+    let isCancelled = false;
+
     const loadNewTrack = async () => {
       if (!currentTrack) return;
       
@@ -56,14 +57,11 @@ export function useAudioPlayer() {
       let audioUri = "";
       
       if (currentTrack.source === 'deezer') {
-        // Deezer provides direct 30s preview URLs that work cross-origin
         audioUri = currentTrack.audio;
       } else if (currentTrack.source === 'spotify') {
-        // Spotify API no longer provides audio previews
         console.error("Spotify tracks do not have audio available.");
         return;
       } else {
-        // Jamendo direct audio URL
         audioUri = currentTrack.audio;
       }
 
@@ -72,28 +70,35 @@ export function useAudioPlayer() {
         return;
       }
 
-      console.log("Loading audio URI:", audioUri, "isWeb:", isWeb);
-
       try {
         if (soundInstance) {
           await soundInstance.unloadAsync();
+          soundInstance = null;
         }
         
         const { sound } = await Audio.Sound.createAsync(
           { uri: audioUri },
-          { shouldPlay: isPlaying },
-          onPlaybackStatusUpdate
+          { shouldPlay: isPlaying }
         );
+
+        if (isCancelled) {
+          // If a new track was selected while this one was loading, unload and discard it
+          await sound.unloadAsync();
+          return;
+        }
+
+        sound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
         soundInstance = sound;
       } catch (error: any) {
         console.error("Error loading audio:", error);
-        console.error("Error name:", error?.name);
-        console.error("Error message:", error?.message);
-        console.error("Error stack:", error?.stack);
       }
     };
     
     loadNewTrack();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [currentTrack?.id]); // Only re-run when track ID changes
 
   // Handle play/pause state changes from store
