@@ -23,6 +23,7 @@ export function useAudioPlayer() {
     progress,
     currentTimeMs,
     repeatMode,
+    playbackRate,
     setTrack,
     togglePlay,
     play,
@@ -74,8 +75,12 @@ export function useAudioPlayer() {
       if (currentTrack.source === 'deezer') {
         audioUri = currentTrack.audio;
       } else if (currentTrack.source === 'spotify') {
-        console.error("Spotify tracks do not have audio available.");
-        return;
+        if (currentTrack.audio) {
+          audioUri = currentTrack.audio;
+        } else {
+          console.error("Spotify track does not have audio preview available.");
+          return;
+        }
       } else {
         // Fallback for Jamendo (sometimes audio stream is 404, audiodownload works better)
         audioUri = currentTrack.audiodownload || currentTrack.audio;
@@ -94,7 +99,7 @@ export function useAudioPlayer() {
         
         const { sound } = await Audio.Sound.createAsync(
           { uri: audioUri },
-          { shouldPlay: isPlaying }
+          { shouldPlay: isPlaying, rate: playbackRate, shouldCorrectPitch: true }
         );
 
         if (isCancelled) {
@@ -126,6 +131,16 @@ export function useAudioPlayer() {
     };
     updateLoop();
   }, [repeatMode]);
+
+  // Update playback rate when it changes
+  useEffect(() => {
+    const updateRate = async () => {
+      if (soundInstance) {
+        await soundInstance.setRateAsync(playbackRate, true);
+      }
+    };
+    updateRate();
+  }, [playbackRate]);
 
   // Handle play/pause state changes from store
   useEffect(() => {

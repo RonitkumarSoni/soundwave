@@ -23,6 +23,13 @@ interface PlayerState {
   isShuffled: boolean;
   repeatMode: "off" | "all" | "one";
   likedTracks: Track[];
+  recentlyPlayed: Track[];
+  downloadedTracks: Track[];
+  followedArtists: any[];
+  savedAlbums: any[];
+  playbackRate: number;
+  sleepTimer: number | null;
+  sleepTimerTimeout: any | null;
 
   setTrack: (track: Track) => void;
   togglePlay: () => void;
@@ -38,6 +45,16 @@ interface PlayerState {
   toggleLike: (track: Track) => void;
   setQueue: (tracks: Track[]) => void;
   initLikedTracks: () => Promise<void>;
+  toggleDownload: (track: Track) => void;
+  downloadTracks: (tracks: Track[]) => void;
+  initDownloadedTracks: () => Promise<void>;
+  toggleFollowArtist: (artist: any) => void;
+  toggleSaveAlbum: (album: any) => void;
+  initFollowedAndSaved: () => Promise<void>;
+  setPlaybackRate: (rate: number) => void;
+  addToRecentlyPlayed: (track: Track) => void;
+  initRecentlyPlayed: () => Promise<void>;
+  setSleepTimer: (minutes: number | null) => void;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -50,9 +67,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isShuffled: false,
   repeatMode: "off",
   likedTracks: [],
+  recentlyPlayed: [],
+  downloadedTracks: [],
+  followedArtists: [],
+  savedAlbums: [],
+  playbackRate: 1.0,
+  sleepTimer: null,
+  sleepTimerTimeout: null,
 
-  setTrack: (track) =>
-    set({ currentTrack: track, isPlaying: true, progress: 0, currentTimeMs: 0 }),
+  setTrack: (track) => {
+    set({ currentTrack: track, isPlaying: true, progress: 0, currentTimeMs: 0 });
+    get().addToRecentlyPlayed(track);
+  },
   togglePlay: () => set((s) => ({ isPlaying: !s.isPlaying })),
   play: () => set({ isPlaying: true }),
   pause: () => set({ isPlaying: false }),
@@ -134,6 +160,84 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       console.error('Failed to load liked tracks', e);
     }
   },
+  addToRecentlyPlayed: (track) => {
+    const { recentlyPlayed } = get();
+    // Remove track if it's already in the list to avoid duplicates
+    const filtered = recentlyPlayed.filter(t => t.id !== track.id);
+    const newRecent = [track, ...filtered].slice(0, 20); // Keep last 20
+    set({ recentlyPlayed: newRecent });
+    AsyncStorage.setItem('recently_played_tracks', JSON.stringify(newRecent)).catch(console.error);
+  },
+  initRecentlyPlayed: async () => {
+    try {
+      const stored = await AsyncStorage.getItem('recently_played_tracks');
+      if (stored) {
+        set({ recentlyPlayed: JSON.parse(stored) });
+      }
+    } catch (e) {
+      console.error('Failed to load recently played tracks', e);
+    }
+  },
+  toggleDownload: (track) => {
+    const { downloadedTracks } = get();
+    const isDownloaded = downloadedTracks.some(t => t.id === track.id);
+    const newDownloaded = isDownloaded
+      ? downloadedTracks.filter(t => t.id !== track.id)
+      : [track, ...downloadedTracks];
+    set({ downloadedTracks: newDownloaded });
+    AsyncStorage.setItem('downloaded_tracks', JSON.stringify(newDownloaded)).catch(console.error);
+  },
+  downloadTracks: (tracks) => {
+    const { downloadedTracks } = get();
+    const existingIds = new Set(downloadedTracks.map(t => t.id));
+    const newTracks = tracks.filter(t => !existingIds.has(t.id));
+    
+    if (newTracks.length > 0) {
+      const newDownloaded = [...newTracks, ...downloadedTracks];
+      set({ downloadedTracks: newDownloaded });
+      AsyncStorage.setItem('downloaded_tracks', JSON.stringify(newDownloaded)).catch(console.error);
+    }
+  },
+  initDownloadedTracks: async () => {
+    try {
+      const stored = await AsyncStorage.getItem('downloaded_tracks');
+      if (stored) {
+        set({ downloadedTracks: JSON.parse(stored) });
+      }
+    } catch (e) {
+      console.error('Failed to load downloaded tracks', e);
+    }
+  },
+  toggleFollowArtist: (artist) => {
+    const { followedArtists } = get();
+    const isFollowed = followedArtists.some(a => a.id === artist.id);
+    const newFollowed = isFollowed
+      ? followedArtists.filter(a => a.id !== artist.id)
+      : [artist, ...followedArtists];
+    set({ followedArtists: newFollowed });
+    AsyncStorage.setItem('followed_artists', JSON.stringify(newFollowed)).catch(console.error);
+  },
+  toggleSaveAlbum: (album) => {
+    const { savedAlbums } = get();
+    const isSaved = savedAlbums.some(a => a.id === album.id);
+    const newSaved = isSaved
+      ? savedAlbums.filter(a => a.id !== album.id)
+      : [album, ...savedAlbums];
+    set({ savedAlbums: newSaved });
+    AsyncStorage.setItem('saved_albums', JSON.stringify(newSaved)).catch(console.error);
+  },
+  initFollowedAndSaved: async () => {
+    try {
+      const artistsStored = await AsyncStorage.getItem('followed_artists');
+      if (artistsStored) set({ followedArtists: JSON.parse(artistsStored) });
+      
+      const albumsStored = await AsyncStorage.getItem('saved_albums');
+      if (albumsStored) set({ savedAlbums: JSON.parse(albumsStored) });
+    } catch (e) {
+      console.error('Failed to load followed/saved', e);
+    }
+  },
+  setPlaybackRate: (rate) => set({ playbackRate: rate }),
   setQueue: (tracks) => {
     const { isShuffled } = get();
     if (isShuffled) {
@@ -147,4 +251,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       set({ queue: tracks, originalQueue: tracks });
     }
   },
+  setSleepTimer: (minutes) => {
+    const { sleepTimerTimeout, pause } = get();
+    if (sleepTimerTimeout) clearTimeout(sleepTimerTimeout);
+
+    if (minutes === null) {
+      set({ sleepTimer: null, sleepTimerTimeout: null });
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      pause();
+      set({ sleepTimer: null, sleepTimerTimeout: null });
+    }, minutes * 60 * 1000);
+
+    set({ sleepTimer: minutes, sleepTimerTimeout: timeout });
+  }
 }));

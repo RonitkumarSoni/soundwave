@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, {
   useAnimatedStyle,
   withSpring,
@@ -22,10 +22,10 @@ interface BottomNavProps {
 }
 
 const tabs = [
-  { icon: "home" as const, iconOutline: "home-outline" as const, label: "Home" },
-  { icon: "search" as const, iconOutline: "search-outline" as const, label: "Search" },
-  { icon: "musical-notes" as const, iconOutline: "musical-notes-outline" as const, label: "Library" },
-  { icon: "settings" as const, iconOutline: "settings-outline" as const, label: "Settings" },
+  { type: "ionic", icon: "home" as const, iconOutline: "home-outline" as const, label: "Home" },
+  { type: "ionic", icon: "search" as const, iconOutline: "search-outline" as const, label: "Search" },
+  { type: "ionic", icon: "musical-notes" as const, iconOutline: "musical-notes-outline" as const, label: "Library" },
+  { type: "material", icon: "brightness-percent" as const, iconOutline: "brightness-percent" as const, label: "Premium" },
 ];
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
@@ -49,7 +49,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
 }
 
 interface TabItemProps {
-  tab: (typeof tabs)[number];
+  tab: any;
   index: number;
   isActive: boolean;
   onPress: () => void;
@@ -87,11 +87,19 @@ function TabItem({ tab, isActive, onPress }: TabItemProps) {
           />
         </Animated.View>
 
-        <Ionicons
-          name={isActive ? tab.icon : tab.iconOutline}
-          size={24}
-          color={isActive ? colors.label : colors.secondaryLabel}
-        />
+        {tab.type === "material" ? (
+          <MaterialCommunityIcons
+            name={isActive ? tab.icon : tab.iconOutline}
+            size={26}
+            color={isActive ? colors.label : colors.secondaryLabel}
+          />
+        ) : (
+          <Ionicons
+            name={isActive ? tab.icon : tab.iconOutline}
+            size={24}
+            color={isActive ? colors.label : colors.secondaryLabel}
+          />
+        )}
       </Animated.View>
     </Pressable>
   );
@@ -121,7 +129,7 @@ const styles = StyleSheet.create({
   },
   blurContainer: {
     width: "100%",
-    maxWidth: 320,
+    maxWidth: 280,
     height: 64,
     borderRadius: 32,
     overflow: "hidden",
@@ -132,8 +140,8 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-evenly",
-    paddingHorizontal: 24,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
     backgroundColor: colors.surface,
   },
   tabPressable: {

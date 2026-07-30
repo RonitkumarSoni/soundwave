@@ -13,6 +13,10 @@ export interface SettingsState {
   language: "en" | "hi" | "auto";
   pushNotifications: boolean;
   newMusicAlerts: boolean;
+  hasSeenOnboarding: boolean;
+  dataSaver: boolean;
+  canvasEnabled: boolean;
+  carMode: boolean;
 
   updateSetting: <K extends keyof Omit<SettingsState, "updateSetting" | "resetToDefaults" | "loadFromStorage">>(
     key: K,
@@ -34,6 +38,10 @@ const defaultSettings = {
   language: "en" as const,
   pushNotifications: true,
   newMusicAlerts: true,
+  hasSeenOnboarding: false,
+  dataSaver: false,
+  canvasEnabled: true,
+  carMode: false,
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

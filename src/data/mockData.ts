@@ -210,4 +210,40 @@ export const genres: Genre[] = [
 ];
 
 export const filterChips = ["All", "New Artists", "Hot Tracks", "Editor's Picks"];
-export const libraryTabs = ["All", "Liked Songs", "Playlists", "Downloads"];
+export const libraryTabs = ["All", "Playlists", "Liked Songs", "Downloads", "Podcasts"];
+
+export const trendingSearches = [
+  "Taylor Swift",
+  "Lofi Girl",
+  "Workout Pop",
+  "Top 50 Global",
+  "Arijit Singh",
+];
+
+export interface MixCard {
+  id: string;
+  title: string;
+  description: string;
+  coverUrl: string;
+}
+
+export const dailyMixes: MixCard[] = [
+  { id: "dm_1", title: "Daily Mix 1", description: "Made for you", coverUrl: `${coverBase}/dm1/200/200` },
+  { id: "dm_2", title: "Daily Mix 2", description: "Pop & Dance", coverUrl: `${coverBase}/dm2/200/200` },
+  { id: "dm_3", title: "Daily Mix 3", description: "Hip Hop", coverUrl: `${coverBase}/dm3/200/200` },
+  { id: "dm_4", title: "Daily Mix 4", description: "Chill Beats", coverUrl: `${coverBase}/dm4/200/200` },
+];
+
+export const newReleases: MixCard[] = [
+  { id: "nr_1", title: "Midnight", description: "New Single", coverUrl: `${coverBase}/nr1/200/200` },
+  { id: "nr_2", title: "Dawn", description: "Latest Album", coverUrl: `${coverBase}/nr2/200/200` },
+  { id: "nr_3", title: "Eclipse", description: "EP Release", coverUrl: `${coverBase}/nr3/200/200` },
+  { id: "nr_4", title: "Horizon", description: "Remix Pack", coverUrl: `${coverBase}/nr4/200/200` },
+];
+
+export const topPodcasts = [
+  { id: "pc_1", title: "The Daily", host: "The New York Times", coverUrl: `${coverBase}/pc1/200/200` },
+  { id: "pc_2", title: "Huberman Lab", host: "Scicomm Media", coverUrl: `${coverBase}/pc2/200/200` },
+  { id: "pc_3", title: "Design Matters", host: "Debbie Millman", coverUrl: `${coverBase}/pc3/200/200` },
+  { id: "pc_4", title: "Syntax", host: "Wes Bos & Scott Tolinski", coverUrl: `${coverBase}/pc4/200/200` },
+];

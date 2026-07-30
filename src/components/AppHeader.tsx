@@ -65,7 +65,29 @@ export function AppHeader({ mode, title }: AppHeaderProps) {
               <Ionicons name="search" size={18} color={colors.label} />
             </BlurView>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
+          <TouchableOpacity 
+            style={styles.iconButton} 
+            activeOpacity={0.7}
+            onPress={() => router.push('/friends')}
+          >
+            <BlurView intensity={20} tint="dark" style={styles.iconBlur}>
+              <Ionicons name="people-outline" size={18} color={colors.label} />
+            </BlurView>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.iconButton} 
+            activeOpacity={0.7}
+            onPress={() => router.push('/history')}
+          >
+            <BlurView intensity={20} tint="dark" style={styles.iconBlur}>
+              <Ionicons name="time-outline" size={18} color={colors.label} />
+            </BlurView>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.iconButton} 
+            activeOpacity={0.7}
+            onPress={() => router.push('/notifications')}
+          >
             <BlurView intensity={20} tint="dark" style={styles.iconBlur}>
               <Ionicons
                 name="notifications-outline"
@@ -141,7 +163,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   title: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: "700",
     color: colors.label,
     letterSpacing: -0.5,

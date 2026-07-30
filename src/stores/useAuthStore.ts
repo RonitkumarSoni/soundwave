@@ -22,6 +22,7 @@ interface AuthState {
   logout: () => Promise<void>;
   loadFromStorage: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => void;
+  upgradeToPremium: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -89,5 +90,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const updatedUser = { ...user, ...profile };
     AsyncStorage.setItem("user_profile", JSON.stringify(updatedUser)).catch(console.error);
     set({ user: updatedUser });
+  },
+
+  upgradeToPremium: async () => {
+    const { user, updateProfile } = get();
+    if (!user) return;
+    updateProfile({ is_premium: true });
+    // In a real app, this might sync with a backend endpoint
   },
 }));

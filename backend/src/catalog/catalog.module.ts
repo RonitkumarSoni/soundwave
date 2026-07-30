@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { CatalogController } from './catalog.controller';
-import { JamendoModule } from '../jamendo/jamendo.module';
-import { DeezerService } from './deezer.service';
+import { SpotifyService } from './spotify.service';
 
 @Module({
-  imports: [JamendoModule],
+  imports: [ConfigModule],
   controllers: [CatalogController],
-  providers: [DeezerService],
+  providers: [SpotifyService],
 })
 export class CatalogModule {}

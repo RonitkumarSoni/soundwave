@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Image } from "react-native";
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,14 +9,21 @@ import { AppHeader } from "@/components/AppHeader";
 import { FilterChips } from "@/components/FilterChips";
 import { ForYouCarousel } from "@/components/ForYouCarousel";
 import { TrackRow } from "@/components/TrackRow";
-import { filterChips } from "@/data/mockData";
+import { CardSkeleton } from "@/components/Skeletons";
+import { filterChips, dailyMixes, newReleases, allTracks, topPodcasts } from "@/data/mockData";
 import { api } from "@/lib/api";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePlayerStore } from "@/stores/usePlayerStore";
+import { useBottomPadding } from "@/hooks/useBottomPadding";
 
 function ArtistRow({ artist }: { artist: any }) {
+  const router = useRouter();
   return (
-    <TouchableOpacity style={styles.artistRow} activeOpacity={0.7}>
+    <TouchableOpacity 
+      style={styles.artistRow} 
+      activeOpacity={0.7}
+      onPress={() => router.push(`/artist/${artist.id}`)}
+    >
       <Image source={{ uri: artist.image }} style={styles.artistAvatar} />
       <View style={styles.artistInfo}>
         <Text style={styles.artistName} numberOfLines={1}>{artist.name}</Text>
@@ -35,53 +42,31 @@ export default function HomeScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [isSlowWakeup, setIsSlowWakeup] = useState(false);
   const insets = useSafeAreaInsets();
+  const bottomPadding = useBottomPadding();
   
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const recentlyPlayed = usePlayerStore((s) => s.recentlyPlayed);
+  const initRecentlyPlayed = usePlayerStore((s) => s.initRecentlyPlayed);
 
   useEffect(() => {
-    const handleDeepLink = async () => {
-      try {
-        const pendingId = await AsyncStorage.getItem('pending_play_id');
-        if (pendingId) {
-          await AsyncStorage.removeItem('pending_play_id');
-          const track = await api.getTrackById(pendingId);
-          if (track) {
-            setTrack(track);
-            setQueue([track]);
-          }
-        }
-      } catch (err) {
-        console.error("Deep link handling error:", err);
-      }
-    };
-    handleDeepLink();
+    initRecentlyPlayed();
   }, []);
 
-  // Map filters to Jamendo order parameters
   const getOrderParam = (filter: string) => {
     switch (filter) {
-      case "Hot Tracks":
-        return "popularity_total";
-      case "Editor's Picks":
-        return "releasedate";
+      case "Hot Tracks": return "popularity_total";
+      case "Editor's Picks": return "releasedate";
       case "All":
-      default:
-        return "popularity_week";
+      default: return "popularity_week";
     }
   };
 
   const loadInitialData = async (filter: string) => {
     setLoading(true);
-    setIsSlowWakeup(false);
     setOffset(0);
     setHasMore(true);
-
-    const wakeTimeout = setTimeout(() => {
-      setIsSlowWakeup(true);
-    }, 5000);
 
     try {
       if (filter === "New Artists") {
@@ -93,7 +78,6 @@ export default function HomeScreen() {
         setListData(tracks);
       }
     } finally {
-      clearTimeout(wakeTimeout);
       setLoading(false);
     }
   };
@@ -103,145 +87,241 @@ export default function HomeScreen() {
     setLoadingMore(true);
     const nextOffset = offset + 10;
 
-    let items: any[] = [];
-    if (activeFilter === "New Artists") {
-      items = await api.getArtists(10, nextOffset);
-    } else {
-      const order = getOrderParam(activeFilter);
-      items = await api.getPopular(10, nextOffset, order);
+    try {
+      let items: any[] = [];
+      if (activeFilter === "New Artists") {
+        items = await api.getArtists(10, nextOffset);
+      } else {
+        const order = getOrderParam(activeFilter);
+        items = await api.getPopular(10, nextOffset, order);
+      }
+      
+      if (!items || items.length < 10) setHasMore(false);
+      
+      if (items && items.length > 0) {
+        setListData((prev) => [...prev, ...items]);
+        setOffset(nextOffset);
+      }
+    } catch (e) {
+      console.error('Failed to load more data', e);
+    } finally {
+      setLoadingMore(false);
     }
-    
-    if (items.length < 10) {
-      setHasMore(false);
-    }
-    
-    setListData((prev) => [...prev, ...items]);
-    setOffset(nextOffset);
-    setLoadingMore(false);
   };
 
   useEffect(() => {
     loadInitialData(activeFilter);
   }, [activeFilter]);
 
+  const renderSkeletons = () => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
+      <CardSkeleton />
+      <CardSkeleton />
+      <CardSkeleton />
+    </ScrollView>
+  );
+
   const renderHeader = () => (
     <View>
-      {/* Header */}
-      <AppHeader mode="greeting" />
+      <View style={{ paddingTop: insets.top }}>
+        <AppHeader mode="greeting" />
+      </View>
 
-      {/* Filter Chips */}
       <FilterChips
         chips={filterChips}
         activeChip={activeFilter}
         onSelect={setActiveFilter}
       />
 
-      {/* For You Section */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>For you</Text>
-      </View>
-      <ForYouCarousel />
+      {loading ? (
+        <View style={{ marginTop: spacing.xl, gap: spacing.xxl }}>
+          <View>
+            <Text style={[styles.sectionTitle, { marginLeft: spacing.lg, marginBottom: spacing.md }]}>For you</Text>
+            {renderSkeletons()}
+          </View>
+          <View>
+            <Text style={[styles.sectionTitle, { marginLeft: spacing.lg, marginBottom: spacing.md }]}>Daily Mixes</Text>
+            {renderSkeletons()}
+          </View>
+        </View>
+      ) : (
+        <>
+          <View style={[styles.sectionHeader, { marginTop: spacing.sm }]}>
+            <Text style={styles.sectionTitle}>For you</Text>
+          </View>
+          <ForYouCarousel />
 
-      {/* Popular Section */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>
-          {activeFilter === "New Artists" ? "Popular Artists" : "Popular Tracks"}
-        </Text>
-        <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/(search)")}>
-          <Text style={styles.showAll}>Show all →</Text>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.timeContextContainer}>
+            {[
+              { id: 1, title: 'Morning Commute', image: 'https://images.unsplash.com/photo-1494548162494-384bba4ab999?w=300&q=80' },
+              { id: 2, title: 'Wake Up Pop', image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80' },
+              { id: 3, title: 'Coffee & Chill', image: 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=300&q=80' },
+              { id: 4, title: 'Focus Flow', image: 'https://images.unsplash.com/photo-1483058712412-4245e9b90334?w=300&q=80' },
+              { id: 5, title: 'Daily Lift', image: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=300&q=80' },
+              { id: 6, title: 'Discover Weekly', image: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300&q=80' },
+            ].map((item) => (
+              <TouchableOpacity key={item.id} style={styles.timeContextCard} activeOpacity={0.7}>
+                <Image source={{ uri: item.image }} style={styles.timeContextImage} />
+                <Text style={styles.timeContextTitle} numberOfLines={2}>{item.title}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={{ marginBottom: spacing.md, marginTop: spacing.sm }}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Daily Mixes</Text>
+            </View>
+            <FlatList
+              data={dailyMixes}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.recentCard} activeOpacity={0.7}>
+                  <Image source={{ uri: item.coverUrl }} style={styles.recentImage} />
+                  <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
+                  <Text style={styles.artistSub} numberOfLines={1}>{item.description}</Text>
+                </TouchableOpacity>
+              )}
+              keyExtractor={item => item.id}
+            />
+          </View>
+
+          <View style={{ marginBottom: spacing.md }}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>New Releases</Text>
+            </View>
+            <FlatList
+              data={newReleases}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.recentCard} activeOpacity={0.7}>
+                  <Image source={{ uri: item.coverUrl }} style={styles.recentImage} />
+                  <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
+                  <Text style={styles.artistSub} numberOfLines={1}>{item.description}</Text>
+                </TouchableOpacity>
+              )}
+              keyExtractor={item => item.id}
+            />
+          </View>
+
+          <View style={{ marginBottom: spacing.md }}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Top Podcasts</Text>
+            </View>
+            <FlatList
+              data={topPodcasts}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.recentCard} activeOpacity={0.7}>
+                  <Image source={{ uri: item.coverUrl }} style={[styles.recentImage, { borderRadius: 12 }]} />
+                  <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
+                  <Text style={styles.artistSub} numberOfLines={1}>{item.host}</Text>
+                </TouchableOpacity>
+              )}
+              keyExtractor={item => item.id}
+            />
+          </View>
+
+          <View style={{ marginBottom: spacing.md }}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recommended for You</Text>
+            </View>
+            <FlatList
+              data={allTracks.slice(0, 6)}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+              renderItem={({ item }) => (
+                <TouchableOpacity 
+                  style={styles.recentCard} 
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setTrack(item);
+                    setQueue(allTracks);
+                  }}
+                >
+                  <Image source={{ uri: item.coverUrl }} style={styles.recentImage} />
+                  <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
+                  <Text style={styles.artistSub} numberOfLines={1}>{item.artist}</Text>
+                </TouchableOpacity>
+              )}
+              keyExtractor={item => 'rec_' + item.id}
+            />
+          </View>
+
+          {recentlyPlayed && recentlyPlayed.length > 0 && (
+            <View style={{ marginBottom: spacing.md }}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Recently Played</Text>
+              </View>
+              <FlatList
+                data={recentlyPlayed}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    style={styles.recentCard} 
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setTrack(item);
+                      setQueue(recentlyPlayed);
+                    }}
+                  >
+                    <Image source={{ uri: item.image }} style={styles.recentImage} />
+                    <Text style={styles.recentTitle} numberOfLines={1}>{item.name}</Text>
+                  </TouchableOpacity>
+                )}
+                keyExtractor={item => 'recent_' + item.id}
+              />
+            </View>
+          )}
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              {activeFilter === "New Artists" ? "Popular Artists" : "Popular Tracks"}
+            </Text>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => router.push("/(search)")}>
+              <Text style={styles.showAll}>Show all →</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
     </View>
   );
-
-  const renderFooter = () => {
-    if (!loadingMore) return null;
-    return (
-      <ActivityIndicator 
-        size="small" 
-        color={colors.accentSolid} 
-        style={{ marginVertical: 20 }} 
-      />
-    );
-  };
 
   return (
     <LinearGradient
       colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
       style={styles.container}
     >
-      {loading ? (
-        <View style={styles.loadingContainer} />
-      ) : (
-        <FlatList
-          data={listData}
-          renderItem={({ item, index }) => (
-            activeFilter === "New Artists" ? (
-              <ArtistRow artist={item} />
-            ) : (
-              <TrackRow track={item} index={index} contextQueue={listData as any} />
-            )
-          )}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={renderHeader}
-          ListFooterComponent={renderFooter}
-          contentContainerStyle={{
-            paddingTop: insets.top,
-            paddingBottom: 160, // space for MiniPlayer + BottomNav
-          }}
-          showsVerticalScrollIndicator={false}
-          onEndReached={loadMoreData}
-          onEndReachedThreshold={0.4}
-        />
-      )}
+      <FlatList
+        data={listData}
+        renderItem={({ item, index }) => (
+          activeFilter === "New Artists" ? (
+            <ArtistRow artist={item} />
+          ) : (
+            <TrackRow track={item} index={index} contextQueue={listData as any} />
+          )
+        )}
+        keyExtractor={(item, index) => (item.id ? item.id.toString() : index.toString()) + '_' + index}
+        ListHeaderComponent={renderHeader}
+        contentContainerStyle={{ paddingBottom: bottomPadding }}
+        showsVerticalScrollIndicator={false}
+        onEndReached={loadMoreData}
+        onEndReachedThreshold={0.4}
+      />
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-    marginTop: spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.label,
-  },
-  showAll: {
-    fontSize: 13,
-    color: colors.secondaryLabel,
-    fontWeight: "500",
-  },
-  footerLoader: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  loadingContainer: {
-    marginTop: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  slowWakeupText: {
-    marginTop: 16,
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
+  container: { flex: 1 },
   artistRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -256,17 +336,48 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
     backgroundColor: colors.surface,
   },
-  artistInfo: {
+  artistInfo: { flex: 1 },
+  artistName: { fontSize: 16, fontWeight: "600", color: colors.label },
+  artistSub: { fontSize: 12, color: colors.secondaryLabel, marginTop: 2 },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+  },
+  sectionTitle: { fontSize: 20, fontWeight: "700", color: colors.label },
+  showAll: { fontSize: 13, color: colors.secondaryLabel, fontWeight: "500" },
+  recentCard: { width: 110, marginRight: spacing.sm },
+  recentImage: { width: 110, height: 110, borderRadius: 8, marginBottom: 8 },
+  recentTitle: { color: colors.label, fontSize: 13, fontWeight: '500' },
+  loadingContainer: { marginTop: 40, alignItems: 'center', justifyContent: 'center' },
+  timeContextContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+  },
+  timeContextCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 6,
+    width: '48%',
+    overflow: 'hidden',
+  },
+  timeContextImage: {
+    width: 56,
+    height: 56,
+  },
+  timeContextTitle: {
     flex: 1,
-  },
-  artistName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.label,
-  },
-  artistSub: {
-    fontSize: 12,
-    color: colors.secondaryLabel,
-    marginTop: 2,
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '600',
+    paddingHorizontal: spacing.sm,
   },
 });

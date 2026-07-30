@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator, StyleSheet, Platform } from "react-nativ
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Tabs, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { Audio } from "expo-av";
 import { BottomNav } from "@/components/BottomNav";
 import { Ionicons } from "@expo/vector-icons";
 import { MiniPlayer } from "@/components/MiniPlayer";
@@ -19,8 +20,10 @@ export default function RootLayout() {
   const [activeTab, setActiveTab] = useState(0);
 
   const { isLoggedIn, isLoading, loadFromStorage: loadAuthFromStorage } = useAuthStore();
-  const loadSettingsFromStorage = useSettingsStore((s) => s.loadFromStorage);
+  const { hasSeenOnboarding, loadFromStorage: loadSettingsFromStorage } = useSettingsStore();
   const initLikedTracks = usePlayerStore((s) => s.initLikedTracks);
+  const initDownloadedTracks = usePlayerStore((s) => s.initDownloadedTracks);
+  const initFollowedAndSaved = usePlayerStore((s) => s.initFollowedAndSaved);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
 
   // Keyboard shortcuts (web only)
@@ -43,8 +46,25 @@ export default function RootLayout() {
   }, [togglePlay]);
 
   React.useEffect(() => {
+    // Configure audio to play in background
+    const configureAudio = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          staysActiveInBackground: true,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+      } catch (e) {
+        console.warn("Failed to set audio mode", e);
+      }
+    };
+    configureAudio();
+    
     loadSettingsFromStorage();
     initLikedTracks();
+    initDownloadedTracks();
+    initFollowedAndSaved();
   }, []);
 
   React.useEffect(() => {
@@ -62,6 +82,7 @@ export default function RootLayout() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inOnboarding = segments[0] === 'onboarding';
     
     if (!isLoggedIn && !inAuthGroup) {
       // Redirect to login if not logged in
@@ -69,11 +90,15 @@ export default function RootLayout() {
     } else if (isLoggedIn && inAuthGroup) {
       // Redirect to home if logged in but trying to access auth screens
       router.replace('/(home)');
+    } else if (isLoggedIn && !hasSeenOnboarding && !inOnboarding) {
+      // Show onboarding for first-time users
+      router.replace('/onboarding');
     }
-  }, [isLoggedIn, isLoading, segments]);
+  }, [isLoggedIn, isLoading, segments, hasSeenOnboarding]);
 
-  // Detect if we're on the Now Playing screen
+  // Detect if we're on the Now Playing or Onboarding screen
   const isNowPlaying = segments.includes("player" as never);
+  const isOnboarding = segments.includes("onboarding" as never);
 
   const handleTabChange = useCallback(
     (index: number) => {
@@ -89,7 +114,7 @@ export default function RootLayout() {
           router.navigate("/(library)");
           break;
         case 3:
-          router.navigate("/(settings)");
+          router.navigate("/(premium)");
           break;
       }
     },
@@ -102,7 +127,7 @@ export default function RootLayout() {
     if (segment === '(home)') setActiveTab(0);
     else if (segment === '(search)') setActiveTab(1);
     else if (segment === '(library)') setActiveTab(2);
-    else if (segment === '(settings)') setActiveTab(3);
+    else if (segment === '(premium)' || segment === '(settings)') setActiveTab(3);
   }, [segments]);
 
 
@@ -125,7 +150,7 @@ export default function RootLayout() {
     return (
       <View style={styles.container}>
         {Platform.OS === 'web' && <style dangerouslySetInnerHTML={{ __html: globalCss }} />}
-        <StatusBar style="light" />
+        <StatusBar style="light" translucent backgroundColor="transparent" />
         <Tabs screenOptions={{ headerShown: false, tabBarStyle: { display: "none" } }}>
           <Tabs.Screen name="(auth)" options={{ title: "Auth" }} />
         </Tabs>
@@ -136,7 +161,7 @@ export default function RootLayout() {
   return (
     <View style={styles.container}>
       {Platform.OS === 'web' && <style dangerouslySetInnerHTML={{ __html: globalCss }} />}
-      <StatusBar style="light" />
+      <StatusBar style="light" translucent backgroundColor="transparent" />
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -147,14 +172,15 @@ export default function RootLayout() {
         <Tabs.Screen name="(search)" options={{ title: "Search" }} />
         <Tabs.Screen name="(library)" options={{ title: "Library" }} />
         <Tabs.Screen name="(settings)" options={{ title: "Settings" }} />
+        <Tabs.Screen name="(premium)" options={{ title: "Premium" }} />
         <Tabs.Screen
           name="player/now-playing"
           options={{ title: "Now Playing" }}
         />
       </Tabs>
 
-      {/* Custom floating UI — hidden during Now Playing */}
-      {!isNowPlaying && (
+      {/* Custom floating UI — hidden during Now Playing or Onboarding */}
+      {!isNowPlaying && !isOnboarding && (
         <>
           <MiniPlayer />
           <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
