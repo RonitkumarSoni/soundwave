@@ -24,8 +24,8 @@ export default function SignupScreen() {
   const [alertConfig, setAlertConfig] = useState<{ visible: boolean, title: string, message: string }>({ visible: false, title: '', message: '' });
 
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: '394758762438-q309rh1p5afvp52srr5nrc6lt3tepsfl.apps.googleusercontent.com',
-    webClientId: '394758762438-q309rh1p5afvp52srr5nrc6lt3tepsfl.apps.googleusercontent.com',
+    clientId: '1000779968838-njj6ttdbb8el9oouk3v42k6dlpvfne1b.apps.googleusercontent.com',
+    webClientId: '1000779968838-njj6ttdbb8el9oouk3v42k6dlpvfne1b.apps.googleusercontent.com',
   });
 
   React.useEffect(() => {

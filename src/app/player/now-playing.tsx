@@ -18,6 +18,7 @@ import {
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather } from "@expo/vector-icons";
+import { IOSLoader } from "@/components/IOSLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -94,7 +95,8 @@ export default function NowPlayingScreen() {
   const [isPlaylistModalVisible, setPlaylistModalVisible] = useState(false);
   const [isSleepTimerModalVisible, setSleepTimerModalVisible] = useState(false);
   const [isLyricsModalVisible, setLyricsModalVisible] = useState(false);
-  const [lyricsText, setLyricsText] = useState<string | null>(null);
+  const [plainLyrics, setPlainLyrics] = useState<string | null>(null);
+  const [syncedLyrics, setSyncedLyrics] = useState<{ time: number, text: string }[] | null>(null);
   const [translatedLyrics, setTranslatedLyrics] = useState<string | null>(null);
   const [isTranslated, setIsTranslated] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
@@ -103,27 +105,58 @@ export default function NowPlayingScreen() {
   const [addingToPlaylist, setAddingToPlaylist] = useState<string | null>(null);
 
   React.useEffect(() => {
-    setLyricsText(null);
+    setPlainLyrics(null);
+    setSyncedLyrics(null);
     setTranslatedLyrics(null);
     setIsTranslated(false);
   }, [currentTrack?.id]);
 
+  const parseLrc = (lrc: string) => {
+    const lines = lrc.split('\n');
+    const parsed = [];
+    const regex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
+    for (const line of lines) {
+      const match = line.match(regex);
+      if (match) {
+        const min = parseInt(match[1], 10);
+        const sec = parseInt(match[2], 10);
+        const ms = parseInt(match[3].padEnd(3, '0'), 10);
+        const time = min * 60 * 1000 + sec * 1000 + ms;
+        const text = match[4].trim();
+        if (text) {
+          parsed.push({ time, text });
+        }
+      }
+    }
+    return parsed;
+  };
+
   const handleOpenLyrics = async () => {
     setLyricsModalVisible(true);
-    if (!currentTrack || lyricsText) return;
+    if (!currentTrack || (plainLyrics || syncedLyrics)) return;
     setIsLoadingLyrics(true);
     try {
-      const lyrics = await api.getLyrics(currentTrack.artist_name, currentTrack.name);
-      setLyricsText(lyrics || "Lyrics not found for this track. Please try another song.");
+      const result = await api.getLyrics(currentTrack.artist_name, currentTrack.name);
+      if (result) {
+        if (result.syncedLyrics) {
+          setSyncedLyrics(parseLrc(result.syncedLyrics));
+          setPlainLyrics(result.plainLyrics);
+        } else {
+          setPlainLyrics(result.plainLyrics || "Lyrics not found for this track. Please try another song.");
+        }
+      } else {
+        setPlainLyrics("Lyrics not found for this track. Please try another song.");
+      }
     } catch (e) {
-      setLyricsText("Failed to load lyrics.");
+      setPlainLyrics("Failed to load lyrics.");
     } finally {
       setIsLoadingLyrics(false);
     }
   };
 
   const handleToggleTranslation = async () => {
-    if (!lyricsText || lyricsText.includes("Lyrics not found")) return;
+    const textToTranslate = plainLyrics;
+    if (!textToTranslate || textToTranslate.includes("Lyrics not found")) return;
     if (isTranslated) {
       setIsTranslated(false);
       return;
@@ -136,7 +169,7 @@ export default function NowPlayingScreen() {
 
     setIsTranslating(true);
     try {
-      const result = await api.translateLyrics(lyricsText, 'HI');
+      const result = await api.translateLyrics(textToTranslate, 'HI');
       if (result) {
         setTranslatedLyrics(result);
         setIsTranslated(true);
@@ -255,6 +288,26 @@ export default function NowPlayingScreen() {
     ? `${Math.floor(track.duration / 60)}:${String(track.duration % 60).padStart(2, "0")}`
     : "0:00";
 
+  const lyricsScrollRef = useRef<ScrollView>(null);
+  const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
+  const currentMs = progress * durationMs;
+
+  React.useEffect(() => {
+    if (syncedLyrics && isLyricsModalVisible) {
+      const idx = syncedLyrics.findIndex((l, i) => {
+        const nextTime = syncedLyrics[i + 1]?.time || Infinity;
+        return currentMs >= l.time && currentMs < nextTime;
+      });
+      if (idx !== -1 && idx !== activeLyricIndex) {
+        setActiveLyricIndex(idx);
+        lyricsScrollRef.current?.scrollTo({
+          y: Math.max(0, idx * 56 - 150),
+          animated: true,
+        });
+      }
+    }
+  }, [currentMs, syncedLyrics, isLyricsModalVisible]);
+
   return (
     <View style={styles.container}>
       <Animated.Image
@@ -269,7 +322,7 @@ export default function NowPlayingScreen() {
         locations={[0, 0.4, 1]}
         style={StyleSheet.absoluteFillObject}
       />
-      />      {carMode ? (
+      {carMode ? (
         <View style={[styles.innerContainer, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 20, justifyContent: 'center' }]}>
           <TouchableOpacity
             style={{ position: 'absolute', top: insets.top + 10, left: spacing.lg }}
@@ -307,6 +360,9 @@ export default function NowPlayingScreen() {
           </TouchableOpacity>
           <Text style={styles.topBarTitle}>Now Playing</Text>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <TouchableOpacity style={styles.topBarButton} activeOpacity={0.7} onPress={handleOpenLyrics}>
+              <Ionicons name="text" size={20} color="#FFF" />
+            </TouchableOpacity>
             <TouchableOpacity style={styles.topBarButton} activeOpacity={0.7} onPress={() => router.push('/equalizer')}>
               <Ionicons name="options-outline" size={20} color="#FFF" />
             </TouchableOpacity>
@@ -314,12 +370,6 @@ export default function NowPlayingScreen() {
               <Text style={{ color: "#FFF", fontSize: 13, fontWeight: "600" }}>{playbackRate}x</Text>
             </TouchableOpacity>
           </View>
-        </View>
-
-        <View style={{ position: 'absolute', top: insets.top + spacing.sm, right: spacing.xl + 48, zIndex: 10 }}>
-          <TouchableOpacity style={styles.topBarButton} activeOpacity={0.7} onPress={handleOpenLyrics}>
-            <Ionicons name="text" size={20} color="#FFF" />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.coverCarousel}>
@@ -425,31 +475,33 @@ export default function NowPlayingScreen() {
         </View>
 
         {/* Bottom Actions Row */}
-        <View style={styles.bottomActionsRow}>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => toggleDownload(currentTrack)} style={styles.queueButton}>
-            <Ionicons name={downloadedTracks.some(t => t.id === currentTrack.id) ? "cloud-done" : "cloud-download-outline"} size={20} color={downloadedTracks.some(t => t.id === currentTrack.id) ? colors.accentSolid : "rgba(255,255,255,0.7)"} />
-            <Text style={[styles.queueButtonText, downloadedTracks.some(t => t.id === currentTrack.id) && { color: colors.accentSolid }]}>Download</Text>
-          </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => setSleepTimerModalVisible(true)} style={styles.queueButton}>
-            <Ionicons name="moon-outline" size={20} color={sleepTimer ? colors.accentSolid : "rgba(255,255,255,0.7)"} />
-            {sleepTimer && <Text style={[styles.queueButtonText, { color: colors.accentSolid }]}>{sleepTimer}m</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity 
-            activeOpacity={0.7} 
-            onPress={() => {
-              const nextSpeed = playbackSpeed === 1 ? 1.25 : playbackSpeed === 1.25 ? 1.5 : playbackSpeed === 1.5 ? 2 : 1;
-              setPlaybackSpeed(nextSpeed);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }} 
-            style={styles.queueButton}
-          >
-            <Text style={{ color: playbackSpeed !== 1 ? colors.accentSolid : "rgba(255,255,255,0.7)", fontSize: 16, fontWeight: '700' }}>{playbackSpeed}x</Text>
-            <Text style={[styles.queueButtonText, playbackSpeed !== 1 && { color: colors.accentSolid }]}>Speed</Text>
-          </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => setQueueVisible(true)} style={styles.queueButton}>
-            <Feather name="list" size={20} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.queueButtonText}>Up Next</Text>
-          </TouchableOpacity>
+        <View style={{ paddingHorizontal: spacing.lg }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, alignItems: 'center' }}>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => toggleDownload(currentTrack)} style={styles.queueButton}>
+              <Ionicons name={downloadedTracks.some(t => t.id === currentTrack.id) ? "cloud-done" : "cloud-download-outline"} size={20} color={downloadedTracks.some(t => t.id === currentTrack.id) ? colors.accentSolid : "rgba(255,255,255,0.7)"} />
+              <Text style={[styles.queueButtonText, downloadedTracks.some(t => t.id === currentTrack.id) && { color: colors.accentSolid }]}>Download</Text>
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => setSleepTimerModalVisible(true)} style={styles.queueButton}>
+              <Ionicons name="moon-outline" size={20} color={sleepTimer ? colors.accentSolid : "rgba(255,255,255,0.7)"} />
+              {sleepTimer && <Text style={[styles.queueButtonText, { color: colors.accentSolid }]}>{sleepTimer}m</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity 
+              activeOpacity={0.7} 
+              onPress={() => {
+                const nextSpeed = playbackSpeed === 1 ? 1.25 : playbackSpeed === 1.25 ? 1.5 : playbackSpeed === 1.5 ? 2 : 1;
+                setPlaybackSpeed(nextSpeed);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }} 
+              style={styles.queueButton}
+            >
+              <Text style={{ color: playbackSpeed !== 1 ? colors.accentSolid : "rgba(255,255,255,0.7)", fontSize: 16, fontWeight: '700' }}>{playbackSpeed}x</Text>
+              <Text style={[styles.queueButtonText, playbackSpeed !== 1 && { color: colors.accentSolid }]}>Speed</Text>
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => setQueueVisible(true)} style={styles.queueButton}>
+              <Feather name="list" size={20} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.queueButtonText}>Up Next</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </View>
       )}
@@ -549,7 +601,7 @@ export default function NowPlayingScreen() {
                     </Text>
                   </View>
                   {addingToPlaylist === playlist.id && (
-                    <ActivityIndicator size="small" color={colors.accentSolid} />
+                    <IOSLoader size="small" color={colors.accentSolid} />
                   )}
                 </TouchableOpacity>
               ))
@@ -624,9 +676,9 @@ export default function NowPlayingScreen() {
             </TouchableOpacity>
             <Text style={styles.queueTitle}>Lyrics</Text>
             
-            <TouchableOpacity onPress={handleToggleTranslation} disabled={!lyricsText || isLoadingLyrics || isTranslating} style={[styles.closeButton, { opacity: lyricsText && !lyricsText.includes("Lyrics not found") ? 1 : 0.5 }]}>
+            <TouchableOpacity onPress={handleToggleTranslation} disabled={!plainLyrics || plainLyrics.includes("Lyrics not found") || isLoadingLyrics || isTranslating} style={[styles.closeButton, { opacity: plainLyrics && !plainLyrics.includes("Lyrics not found") ? 1 : 0.5 }]}>
               {isTranslating ? (
-                <ActivityIndicator size="small" color="#FFF" />
+                <IOSLoader size="small" color="#FFF" />
               ) : (
                 <Text style={{ color: isTranslated ? colors.accentSolid : "#FFF", fontSize: 18, fontWeight: '700' }}>
                   A/अ
@@ -635,12 +687,38 @@ export default function NowPlayingScreen() {
             </TouchableOpacity>
           </View>
           
-          <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl }}>
+          <ScrollView ref={lyricsScrollRef} contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl }}>
             {isLoadingLyrics ? (
-              <ActivityIndicator size="large" color={colors.accentSolid} style={{ marginTop: 40 }} />
+              <IOSLoader size="large" color={colors.accentSolid} style={{ marginTop: 40 }} text="Loading..." />
+            ) : syncedLyrics && !isTranslated ? (
+              <View style={{ paddingBottom: 250 }}>
+                {syncedLyrics.map((line, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    onPress={() => seekGlobalAudio(line.time / durationMs)}
+                    activeOpacity={0.7}
+                    style={{ marginVertical: 12 }}
+                  >
+                    <Text 
+                      style={{ 
+                        color: idx === activeLyricIndex ? '#FFF' : 'rgba(255,255,255,0.4)', 
+                        fontSize: idx === activeLyricIndex ? 32 : 24, 
+                        lineHeight: idx === activeLyricIndex ? 46 : 38, 
+                        fontWeight: idx === activeLyricIndex ? '800' : '600', 
+                        textAlign: 'left',
+                        textShadowColor: idx === activeLyricIndex ? 'rgba(255,255,255,0.3)' : 'transparent',
+                        textShadowOffset: { width: 0, height: 0 },
+                        textShadowRadius: idx === activeLyricIndex ? 15 : 0
+                      }}
+                    >
+                      {line.text}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             ) : (
               <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 22, lineHeight: 36, fontWeight: '600', textAlign: 'center' }}>
-                {isTranslated ? translatedLyrics : lyricsText || "Loading..."}
+                {isTranslated ? translatedLyrics : plainLyrics || "Loading..."}
               </Text>
             )}
           </ScrollView>

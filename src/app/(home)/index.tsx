@@ -1,6 +1,8 @@
+import { Image } from 'expo-image';
 import React, { useState, useEffect } from "react";
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, Image, ScrollView } from "react-native";
+import { FlatList, View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from "expo-linear-gradient";
+import { IOSLoader } from "@/components/IOSLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -38,6 +40,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState("All");
   const [listData, setListData] = useState<any[]>([]);
+  const [previewTracks, setPreviewTracks] = useState<any[]>([]);
+  const [youtubeTracks, setYoutubeTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
@@ -76,6 +80,18 @@ export default function HomeScreen() {
         const order = getOrderParam(filter);
         const tracks = await api.getPopular(10, 0, order);
         setListData(tracks);
+      }
+      
+      // Load 30-sec previews
+      if (previewTracks.length === 0) {
+        const previews = await api.getPreviews();
+        setPreviewTracks(previews);
+      }
+      
+      // Load YouTube Hits
+      if (youtubeTracks.length === 0) {
+        const ytHits = await api.getYoutubeHits();
+        setYoutubeTracks(ytHits);
       }
     } finally {
       setLoading(false);
@@ -278,6 +294,64 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 )}
                 keyExtractor={item => 'recent_' + item.id}
+              />
+            </View>
+          )}
+
+          {previewTracks.length > 0 && (
+            <View style={{ marginBottom: spacing.md }}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>30-Sec Previews (via iTunes)</Text>
+              </View>
+              <FlatList
+                data={previewTracks}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    style={styles.recentCard} 
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setTrack(item);
+                      setQueue(previewTracks);
+                    }}
+                  >
+                    <Image source={{ uri: item.image }} style={[styles.recentImage, { borderRadius: 100 }]} />
+                    <Text style={styles.recentTitle} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.artistSub} numberOfLines={1}>{item.artist_name}</Text>
+                  </TouchableOpacity>
+                )}
+                keyExtractor={item => 'preview_' + item.id}
+              />
+            </View>
+          )}
+
+          {youtubeTracks.length > 0 && (
+            <View style={{ marginBottom: spacing.md }}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Trending on YouTube Music</Text>
+              </View>
+              <FlatList
+                data={youtubeTracks}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    style={styles.recentCard} 
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      setTrack(item);
+                      setQueue(youtubeTracks);
+                    }}
+                  >
+                    <Image source={{ uri: item.image }} style={styles.recentImage} />
+                    <Text style={styles.recentTitle} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.artistSub} numberOfLines={1}>{item.artist_name}</Text>
+                  </TouchableOpacity>
+                )}
+                keyExtractor={item => 'yt_' + item.id}
               />
             </View>
           )}

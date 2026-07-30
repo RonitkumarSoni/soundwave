@@ -147,6 +147,9 @@ export function useAudioPlayer() {
     const updatePlayState = async () => {
       try {
         if (!soundInstance) return;
+        const status = await soundInstance.getStatusAsync();
+        if (!status.isLoaded) return;
+        
         if (isPlaying) {
           await soundInstance.playAsync();
         } else {

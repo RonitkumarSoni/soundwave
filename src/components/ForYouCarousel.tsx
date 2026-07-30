@@ -1,16 +1,8 @@
+import { Image } from 'expo-image';
 import React, { useRef, useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  FlatList,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
-  Image,
-} from "react-native";
+import { FlatList, View, Text, TouchableOpacity, StyleSheet, Dimensions, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { LinearGradient } from "expo-linear-gradient";
+
 import { colors, gradients, spacing, borderRadius } from "@/theme/colors";
 import { promoCards, PromoCard } from "@/data/mockData";
 import { api } from "@/lib/api";
@@ -24,7 +16,7 @@ const CARD_HEIGHT = 180;
 
 export function ForYouCarousel() {
   const [activeIndex, setActiveIndex] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
+  const flashListRef = useRef<FlatList<any>>(null);
   const isDragging = useRef(false);
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
@@ -48,7 +40,7 @@ export function ForYouCarousel() {
       if (isDragging.current) return;
 
       const nextIndex = (activeIndex + 1) % promoCards.length;
-      flatListRef.current?.scrollToIndex({
+      flashListRef.current?.scrollToIndex({
         index: nextIndex,
         animated: true,
       });
@@ -74,7 +66,7 @@ export function ForYouCarousel() {
         <Image
           source={{ uri: item.coverUrl }}
           style={styles.cardBgImage}
-          resizeMode="cover"
+          contentFit="cover"
         />
         {/* Left-to-Right gradient overlay to make text readable but keep image clear on the right */}
         <LinearGradient
@@ -104,7 +96,7 @@ export function ForYouCarousel() {
   return (
     <View style={styles.container}>
       <FlatList
-        ref={flatListRef}
+        ref={flashListRef}
         data={promoCards}
         renderItem={renderCard}
         keyExtractor={(item) => item.id}
@@ -112,14 +104,19 @@ export function ForYouCarousel() {
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
-        snapToInterval={CARD_WIDTH + spacing.lg}
-        decelerationRate="fast"
+        estimatedItemSize={CARD_WIDTH}
         contentContainerStyle={{ paddingHorizontal: spacing.lg }}
         getItemLayout={(_, index) => ({
           length: CARD_WIDTH + spacing.lg,
           offset: (CARD_WIDTH + spacing.lg) * index,
           index,
         })}
+        onScrollToIndexFailed={(info) => {
+          const wait = new Promise(resolve => setTimeout(resolve, 500));
+          wait.then(() => {
+            flashListRef.current?.scrollToIndex({ index: info.index, animated: true });
+          });
+        }}
         onScrollBeginDrag={() => {
           isDragging.current = true;
         }}

@@ -1,17 +1,6 @@
+import { Image } from 'expo-image';
 import React, { useState, useEffect, useRef } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator,
-  Animated,
-  Pressable,
-  Modal,
-} from "react-native";
+import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Pressable, Modal } from 'react-native';
 import { useRouter } from "expo-router";
 import { BlurView } from "expo-blur";
 import AsyncStorage from '@react-native-async-storage/async-storage';

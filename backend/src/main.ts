@@ -59,3 +59,4 @@ async function bootstrap() {
   console.log(`🚀 Soundwave ${serviceName.toUpperCase()} Service API running on http://0.0.0.0:${port}`);
 }
 bootstrap();
+

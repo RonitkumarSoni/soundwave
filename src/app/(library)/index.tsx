@@ -35,6 +35,7 @@ export default function LibraryScreen() {
   const downloadedTracks = usePlayerStore((s) => s.downloadedTracks);
   const followedArtists = usePlayerStore((s) => s.followedArtists);
   const savedAlbums = usePlayerStore((s) => s.savedAlbums);
+  const recentlyPlayed = usePlayerStore((s) => s.recentlyPlayed);
 
   useEffect(() => {
     const loadData = async () => {
@@ -43,6 +44,8 @@ export default function LibraryScreen() {
         setTracks(likedTracks);
       } else if (activeTab === "Downloads") {
         setTracks(downloadedTracks);
+      } else if (activeTab === "Recently Played") {
+        setTracks(recentlyPlayed);
       } else {
         setTracks([]);
       }
@@ -60,7 +63,7 @@ export default function LibraryScreen() {
       setLoading(false);
     };
     loadData();
-  }, [activeTab, likedTracks, downloadedTracks]);
+  }, [activeTab, likedTracks, downloadedTracks, recentlyPlayed]);
 
   const sortedTracks = React.useMemo(() => {
     let result = [...tracks];
@@ -261,7 +264,7 @@ export default function LibraryScreen() {
               </TouchableOpacity>
             ))}
 
-            {(activeTab === "Liked Songs" || activeTab === "Downloads" || activeTab === "All") && sortedTracks.length > 0 && (
+            {(activeTab === "Liked Songs" || activeTab === "Downloads" || activeTab === "Recently Played" || activeTab === "All") && sortedTracks.length > 0 && (
               <View style={styles.section}>
                 {sortedTracks.map((track, index) => (
                   <TrackRow key={`${track.id}-${index}`} track={track} index={index} showDuration contextQueue={sortedTracks} />
@@ -272,7 +275,8 @@ export default function LibraryScreen() {
             {(activeTab !== "Playlists" && activeTab !== "Artists" && activeTab !== "Albums" && sortedTracks.length === 0) && (
               <View style={{ alignItems: 'center', marginTop: 40 }}>
                 <Text style={{ color: 'rgba(255,255,255,0.7)' }}>
-                  {activeTab === "Downloads" ? "No downloaded tracks yet." : "No liked songs yet."}
+                  {activeTab === "Downloads" ? "No downloaded tracks yet." : 
+                   activeTab === "Recently Played" ? "No recently played tracks." : "No liked songs yet."}
                 </Text>
               </View>
             )}

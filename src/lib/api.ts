@@ -3,17 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import CryptoJS from 'crypto-js';
 import { Platform } from 'react-native';
 
+// Use environment variable for API URL in production, fallback to Render backend
+const API_BASE = process.env.EXPO_PUBLIC_API_URL || "https://soundwave-backend-p4y0.onrender.com/api";
+
 // Helper for bypassing CORS on Web
 const getProxiedUrl = (url: string) => {
   if (Platform.OS === 'web') {
-    // We use the local backend as a proxy because public ones get blocked by JioSaavn
-    return `http://localhost:3000/api/catalog/proxy?url=${encodeURIComponent(url)}`;
+    // We use the configured backend as a proxy because public ones get blocked by JioSaavn CORS
+    return `${API_BASE}/catalog/proxy?url=${encodeURIComponent(url)}`;
   }
   return url;
 };
-
-// Use environment variable for API URL in production, fallback to Render backend
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "https://soundwave-backend-p4y0.onrender.com/api";
 
 // Retry helper for Render cold start
 const withRetry = async <T>(fn: () => Promise<T>, retries = 2, delay = 2000): Promise<T> => {
@@ -206,10 +206,38 @@ export const api = {
 
   getPopular: async (limit = 10, offset = 0, order = 'popularity_week') => {
     try {
-      const { data } = await apiClient.get('/catalog/tracks', { 
-        params: { order, limit, offset } 
+      const url = `https://www.jiosaavn.com/api.php?__call=search.getResults&q=popular&n=${limit}&p=${Math.floor(offset / limit) + 1}&_format=json&_marker=0&ctx=android`;
+      const { data } = await axios.get(getProxiedUrl(url));
+      
+      const tracks = (data.results || []).map((song: any) => {
+        let mediaUrl = "";
+        try {
+          if (song.encrypted_media_url) {
+            const key = CryptoJS.enc.Utf8.parse("38346591");
+            const decrypted = CryptoJS.DES.decrypt(
+                { ciphertext: CryptoJS.enc.Base64.parse(song.encrypted_media_url) } as any,
+                key,
+                { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }
+            );
+            mediaUrl = decrypted.toString(CryptoJS.enc.Utf8).replace('_96.mp4', '_320.mp4');
+          }
+        } catch (e) {
+          console.error("Failed to decrypt media url", e);
+        }
+
+        return {
+          id: song.id,
+          name: song.song || song.title,
+          artist_name: song.primary_artists || song.singers || 'Unknown Artist',
+          album_name: song.album || '',
+          image: song.image ? song.image.replace('150x150', '500x500') : 'https://via.placeholder.com/150',
+          audio: mediaUrl,
+          duration: song.duration ? parseInt(song.duration, 10) : 0,
+          source: 'jiosaavn'
+        };
       });
-      return data.results || [];
+
+      return tracks;
     } catch (error) {
       console.error('GetPopular API error:', error);
       return [];
@@ -389,15 +417,21 @@ export const api = {
   
   getLyrics: async (artist: string, title: string) => {
     try {
-      // lyrics.ovh expects format: /v1/artist/title
-      // We will clean the strings slightly for better matching
-      const cleanArtist = artist.split(',')[0].trim(); // take first artist if multiple
-      const cleanTitle = title.split('(')[0].trim(); // remove (feat. ...) or (Remix)
+      const cleanArtist = artist.split(',')[0].trim();
+      const cleanTitle = title.split('(')[0].trim();
       
-      const url = `https://api.lyrics.ovh/v1/${encodeURIComponent(cleanArtist)}/${encodeURIComponent(cleanTitle)}`;
+      const url = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(cleanArtist)}&track_name=${encodeURIComponent(cleanTitle)}`;
       const { data } = await axios.get(url);
       
-      return data.lyrics || null;
+      if (data && data.length > 0) {
+        // Prefer syncedLyrics, fallback to plainLyrics
+        return {
+          syncedLyrics: data[0].syncedLyrics || null,
+          plainLyrics: data[0].plainLyrics || null,
+        };
+      }
+      
+      return null;
     } catch (error) {
       console.log('getLyrics API error:', error);
       return null;
@@ -423,6 +457,41 @@ export const api = {
     } catch (error) {
       console.log('translateLyrics API error:', error);
       return null;
+    }
+  },
+
+  getPreviews: async () => {
+    try {
+      // Fetching popular songs with 30-sec previews from iTunes API because Spotify requires a Premium dev account
+      const url = `https://itunes.apple.com/search?term=pop+hits&limit=15&entity=song`;
+      const { data } = await axios.get(url);
+      
+      const tracks = (data.results || []).map((song: any) => ({
+        id: song.trackId?.toString() || Math.random().toString(),
+        name: song.trackName || 'Unknown Title',
+        artist_name: song.artistName || 'Unknown Artist',
+        album_name: song.collectionName || '',
+        image: song.artworkUrl100 ? song.artworkUrl100.replace('100x100bb', '500x500bb') : 'https://via.placeholder.com/150',
+        audio: song.previewUrl || '', // 30-sec preview
+        duration: 30, // Previews are 30 secs
+        source: 'itunes'
+      })).filter((t: any) => t.audio); // Only keep those with previews
+      
+      return tracks;
+    } catch (error) {
+      console.log('getPreviews API error:', error);
+      return [];
+    }
+  },
+
+  getYoutubeHits: async () => {
+    try {
+      // Calls the new backend YouTube Music service
+      const { data } = await apiClient.get('/youtube/tracks?limit=15');
+      return data.results || [];
+    } catch (error) {
+      console.log('getYoutubeHits API error:', error);
+      return [];
     }
   }
 };

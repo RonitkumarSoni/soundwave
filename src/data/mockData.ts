@@ -210,7 +210,7 @@ export const genres: Genre[] = [
 ];
 
 export const filterChips = ["All", "New Artists", "Hot Tracks", "Editor's Picks"];
-export const libraryTabs = ["All", "Playlists", "Liked Songs", "Downloads", "Podcasts"];
+export const libraryTabs = ["All", "Playlists", "Liked Songs", "Downloads", "Recently Played"];
 
 export const trendingSearches = [
   "Taylor Swift",
