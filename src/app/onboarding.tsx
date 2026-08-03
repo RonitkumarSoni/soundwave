@@ -1,120 +1,121 @@
-import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { colors, gradients, spacing, borderRadius } from '@/theme/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, gradients, spacing } from '@/theme/colors';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
+const ARTIST_SIZE = (width - spacing.xl * 2 - spacing.md * 2) / 3;
 
-const SLIDES = [
-  {
-    id: 1,
-    title: "Welcome to Soundwave",
-    subtitle: "Your favorite music, crystal clear.",
-    icon: "headphones",
-    color: gradients.primary,
-  },
-  {
-    id: 2,
-    title: "Listen Offline",
-    subtitle: "Download your favorite tracks and take them anywhere, without limits.",
-    icon: "download-cloud",
-    color: [colors.accentStart, colors.accentSolid],
-  },
-  {
-    id: 3,
-    title: "Discover More",
-    subtitle: "Find new artists, curated playlists, and enjoy personalized mixes.",
-    icon: "compass",
-    color: [colors.tertiaryLabel, colors.secondaryLabel],
-  }
+// Mock list of popular artists for onboarding
+const INITIAL_ARTISTS = [
+  { id: '1', name: 'Arijit Singh', image: 'https://c.saavncdn.com/artists/Arijit_Singh_002_20230323062147_500x500.jpg' },
+  { id: '2', name: 'Pritam', image: 'https://c.saavncdn.com/artists/Pritam_002_20230323061556_500x500.jpg' },
+  { id: '3', name: 'A.R. Rahman', image: 'https://c.saavncdn.com/artists/AR_Rahman_002_20210120084455_500x500.jpg' },
+  { id: '4', name: 'Justin Bieber', image: 'https://c.saavncdn.com/artists/Justin_Bieber_500x500.jpg' },
+  { id: '5', name: 'Shreya Ghoshal', image: 'https://c.saavncdn.com/artists/Shreya_Ghoshal_004_20230810143809_500x500.jpg' },
+  { id: '6', name: 'Badshah', image: 'https://c.saavncdn.com/artists/Badshah_005_20230608084021_500x500.jpg' },
+  { id: '7', name: 'The Weeknd', image: 'https://c.saavncdn.com/artists/The_Weeknd_500x500.jpg' },
+  { id: '8', name: 'Taylor Swift', image: 'https://c.saavncdn.com/artists/Taylor_Swift_500x500.jpg' },
+  { id: '9', name: 'Drake', image: 'https://c.saavncdn.com/artists/Drake_500x500.jpg' },
+  { id: '10', name: 'Neha Kakkar', image: 'https://c.saavncdn.com/artists/Neha_Kakkar_006_20200822042626_500x500.jpg' },
+  { id: '11', name: 'Ed Sheeran', image: 'https://c.saavncdn.com/artists/Ed_Sheeran_500x500.jpg' },
+  { id: '12', name: 'Sonu Nigam', image: 'https://c.saavncdn.com/artists/Sonu_Nigam_002_20230323060829_500x500.jpg' },
+  { id: '13', name: 'Diljit Dosanjh', image: 'https://c.saavncdn.com/artists/Diljit_Dosanjh_005_20231025072535_500x500.jpg' },
+  { id: '14', name: 'Atif Aslam', image: 'https://c.saavncdn.com/artists/Atif_Aslam_500x500.jpg' },
+  { id: '15', name: 'Ariana Grande', image: 'https://c.saavncdn.com/artists/Ariana_Grande_500x500.jpg' },
 ];
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const updateSetting = useSettingsStore((s) => s.updateSetting);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const [selectedArtists, setSelectedArtists] = useState<Set<string>>(new Set());
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleScroll = (event: any) => {
-    const x = event.nativeEvent.contentOffset.x;
-    const index = Math.round(x / width);
-    setCurrentIndex(index);
-  };
-
-  const nextSlide = () => {
-    if (currentIndex < SLIDES.length - 1) {
-      scrollRef.current?.scrollTo({ x: (currentIndex + 1) * width, animated: true });
+  const toggleArtist = (id: string) => {
+    const newSet = new Set(selectedArtists);
+    if (newSet.has(id)) {
+      newSet.delete(id);
     } else {
-      finishOnboarding();
+      newSet.add(id);
     }
+    setSelectedArtists(newSet);
   };
 
-  const finishOnboarding = () => {
+  const handleFinish = async () => {
+    setIsSaving(true);
+    // In a real app, save these preferences to the backend
+    await new Promise(r => setTimeout(r, 1000)); 
     updateSetting('hasSeenOnboarding', true);
+    setIsSaving(false);
     router.replace('/(home)');
   };
 
+  const isReady = selectedArtists.size >= 3;
+
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={["#170B2E", "#0A0514"]}
-        style={StyleSheet.absoluteFillObject}
-      />
+      <LinearGradient colors={[gradients.background[0], gradients.background[1], gradients.background[2]]} style={StyleSheet.absoluteFill} />
 
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
+      <View style={[styles.header, { paddingTop: insets.top || 40 }]}>
+        <Text style={styles.title}>Choose 3 or more artists you like.</Text>
+      </View>
+
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        {SLIDES.map((slide) => (
-          <View key={slide.id} style={[styles.slide, { width, paddingTop: insets.top }]}>
-            <View style={styles.iconContainer}>
-              <LinearGradient
-                colors={slide.color as any}
-                style={styles.iconBackground}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+        <View style={styles.grid}>
+          {INITIAL_ARTISTS.map(artist => {
+            const isSelected = selectedArtists.has(artist.id);
+            return (
+              <TouchableOpacity
+                key={artist.id}
+                style={styles.artistCard}
+                onPress={() => toggleArtist(artist.id)}
+                activeOpacity={0.7}
               >
-                <Feather name={slide.icon as any} size={64} color="#FFF" />
-              </LinearGradient>
-            </View>
-            <View style={styles.textContainer}>
-              <Text style={styles.title}>{slide.title}</Text>
-              <Text style={styles.subtitle}>{slide.subtitle}</Text>
-            </View>
-          </View>
-        ))}
+                <View style={styles.imageContainer}>
+                  <Image source={{ uri: artist.image }} style={[styles.artistImage, isSelected && styles.artistImageSelected]} />
+                  {isSelected && (
+                    <View style={styles.checkOverlay}>
+                      <Ionicons name="checkmark" size={20} color="#FFF" />
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.artistName} numberOfLines={2}>{artist.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.xl }]}>
-        <View style={styles.pagination}>
-          {SLIDES.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                currentIndex === index && styles.dotActive
-              ]}
-            />
-          ))}
-        </View>
-
+      <View style={[styles.footer, { paddingBottom: insets.bottom || 24 }]}>
         <TouchableOpacity 
-          style={styles.button}
-          onPress={nextSlide}
-          activeOpacity={0.8}
+          style={[styles.doneButton, isReady ? styles.doneButtonActive : null]}
+          onPress={handleFinish}
+          disabled={!isReady || isSaving}
         >
-          <Text style={styles.buttonText}>
-            {currentIndex === SLIDES.length - 1 ? "Get Started" : "Next"}
-          </Text>
+          {isReady && (
+            <LinearGradient
+              colors={[gradients.primary[0], gradients.primary[1]]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+          )}
+          {isSaving ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={[styles.doneButtonText, isReady ? styles.doneButtonTextActive : null]}>
+              {isReady ? 'Done' : 'Choose 3 or more'}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -124,77 +125,98 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0514',
+    backgroundColor: '#000',
   },
-  slide: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xxl,
-  },
-  iconContainer: {
-    marginBottom: 60,
-  },
-  iconBackground: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.accentSolid,
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
-  },
-  textContainer: {
+  header: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
     alignItems: 'center',
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#FFF',
-    marginBottom: spacing.md,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
-  subtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.7)',
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 100,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    justifyContent: 'center',
+  },
+  artistCard: {
+    width: ARTIST_SIZE,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  imageContainer: {
+    width: ARTIST_SIZE,
+    height: ARTIST_SIZE,
+    borderRadius: ARTIST_SIZE / 2,
+    marginBottom: 8,
+    position: 'relative',
+  },
+  artistImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: ARTIST_SIZE / 2,
+    backgroundColor: colors.surface,
+  },
+  artistImageSelected: {
+    opacity: 0.5,
+  },
+  checkOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  artistName: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '500',
     textAlign: 'center',
-    lineHeight: 24,
   },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    paddingTop: 24,
     paddingHorizontal: spacing.xl,
-  },
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: spacing.xl,
-    gap: 8,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  dotActive: {
-    width: 24,
-    backgroundColor: colors.accentSolid,
-  },
-  button: {
-    backgroundColor: colors.accentSolid,
-    paddingVertical: 18,
-    borderRadius: borderRadius.full,
+    backgroundColor: 'transparent',
     alignItems: 'center',
   },
-  buttonText: {
+  doneButton: {
+    width: 200,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  doneButtonActive: {
+    backgroundColor: 'transparent',
+  },
+  doneButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.3)',
+    zIndex: 1,
+  },
+  doneButtonTextActive: {
     color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
   }
 });

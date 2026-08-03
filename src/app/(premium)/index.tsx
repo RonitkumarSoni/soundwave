@@ -10,7 +10,6 @@ import { useAuthStore } from "@/stores/useAuthStore";
 // YOUR REAL UPI ID HERE (e.g. yourname@paytm, number@ybl)
 const MY_UPI_ID = "kumarronit739@ybl"; 
 const APP_NAME = "Soundwave Premium";
-const AMOUNT = "99.00";
 
 export default function PremiumScreen() {
   const insets = useSafeAreaInsets();
@@ -19,6 +18,32 @@ export default function PremiumScreen() {
   const isPremium = user?.is_premium;
 
   const [paymentModalVisible, setPaymentModalVisible] = React.useState(false);
+  const [currency, setCurrency] = React.useState("$");
+  const [price, setPrice] = React.useState("9.99");
+  
+  React.useEffect(() => {
+    fetch('https://ipapi.co/json/')
+      .then(res => res.json())
+      .then(data => {
+        if (data.country_code === 'IN') {
+          setCurrency('₹');
+          setPrice('99.00');
+        } else if (data.country_code === 'GB') {
+          setCurrency('£');
+          setPrice('9.99');
+        } else if (data.country_code === 'EU' || data.in_eu) {
+          setCurrency('€');
+          setPrice('10.99');
+        } else if (data.country_code === 'AE') {
+          setCurrency('AED ');
+          setPrice('19.99');
+        } else {
+          setCurrency('$');
+          setPrice('9.99');
+        }
+      })
+      .catch(err => console.log('Could not fetch location for pricing', err));
+  }, []);
 
   const features = [
     "Ad-free music listening",
@@ -40,7 +65,9 @@ export default function PremiumScreen() {
   const initiatePayment = async (appScheme: string) => {
     setPaymentModalVisible(false);
     
-    const params = `pa=${MY_UPI_ID}&pn=${encodeURIComponent(APP_NAME)}&am=${AMOUNT}&cu=INR`;
+    // For UPI, amount needs to be formatted for India, but this is a demo
+    const payAmount = currency === '₹' ? price : '99.00'; 
+    const params = `pa=${MY_UPI_ID}&pn=${encodeURIComponent(APP_NAME)}&am=${payAmount}&cu=INR`;
     const genericUpi = `upi://pay?${params}`;
     const specificUpi = appScheme ? `${appScheme}://pay?${params}` : genericUpi;
 
@@ -117,7 +144,7 @@ export default function PremiumScreen() {
           <View style={styles.planHeader}>
             <Text style={styles.planName}>Premium Individual</Text>
             <View style={styles.planPriceContainer}>
-              <Text style={styles.planPrice}>$9.99</Text>
+              <Text style={styles.planPrice}>{currency}{price}</Text>
               <Text style={styles.planPeriod}>/ month</Text>
             </View>
           </View>
@@ -143,7 +170,7 @@ export default function PremiumScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Complete your payment</Text>
-              <Text style={styles.modalSubtitle}>Pay ₹{AMOUNT} to {MY_UPI_ID}</Text>
+              <Text style={styles.modalSubtitle}>Pay {currency}{price} to {MY_UPI_ID}</Text>
             </View>
             
             <View style={styles.paymentOptions}>
@@ -276,7 +303,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.6)",
   },
   modalContent: {

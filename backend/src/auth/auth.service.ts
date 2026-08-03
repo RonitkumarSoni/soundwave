@@ -5,8 +5,10 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
-import { OAuth2Client } from 'google-auth-library';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import * as path from 'path';
+import * as fs from 'fs';
 import { UserService } from '../user/user.service';
 import { User } from '../user/user.entity';
 
@@ -23,61 +25,30 @@ export interface AuthTokens {
 
 @Injectable()
 export class AuthService {
-  private googleClient: OAuth2Client;
-
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {
-    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
-    this.googleClient = new OAuth2Client(clientId);
+    // Initialize Firebase Admin
+    if (!getApps().length) {
+      try {
+        const serviceAccountPath = path.resolve(process.cwd(), 'firebase-service-account.json');
+        if (fs.existsSync(serviceAccountPath)) {
+          const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+          initializeApp({
+            credential: cert(serviceAccount),
+          });
+        } else {
+          console.warn('Firebase Service Account file missing at', serviceAccountPath);
+        }
+      } catch (err) {
+        console.error('Failed to initialize Firebase Admin:', err);
+      }
+    }
   }
 
-  /**
-   * Register a new user with email + password
-   */
-  async signup(
-    email: string,
-    password: string,
-    displayName?: string,
-  ): Promise<AuthTokens> {
-    // Check if user already exists
-    const existing = await this.userService.findByEmail(email);
-    if (existing) {
-      throw new ConflictException('Email already registered');
-    }
 
-    // Hash password with bcrypt (per 06-AUTH.md)
-    const salt = await bcrypt.genSalt(12);
-    const password_hash = await bcrypt.hash(password, salt);
-
-    // Create user
-    const user = await this.userService.create({
-      email,
-      password_hash,
-      display_name: displayName || email.split('@')[0],
-    });
-
-    return this.generateTokens(user);
-  }
-
-  /**
-   * Login with email + password
-   */
-  async login(email: string, password: string): Promise<AuthTokens> {
-    const user = await this.userService.findByEmail(email);
-    if (!user || !user.password_hash) {
-      throw new UnauthorizedException('Invalid email or password');
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) {
-      throw new UnauthorizedException('Invalid email or password');
-    }
-
-    return this.generateTokens(user);
-  }
 
   /**
    * Refresh access token
@@ -101,31 +72,31 @@ export class AuthService {
   }
 
   /**
-   * Login/Signup with Google
+   * Login/Signup with Firebase
    */
-  async googleLogin(idToken: string): Promise<AuthTokens> {
+  async firebaseLogin(firebaseIdToken: string): Promise<AuthTokens> {
     try {
-      const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
-      const ticket = await this.googleClient.verifyIdToken({
-        idToken,
-        audience: clientId,
-      });
+      if (!getApps().length) {
+        throw new Error('Firebase Admin not initialized');
+      }
 
-      const payload = ticket.getPayload();
-      if (!payload || !payload.email) {
-        throw new UnauthorizedException('Invalid Google token');
+      // Verify the Firebase ID token
+      const decodedToken = await getAuth().verifyIdToken(firebaseIdToken);
+      
+      if (!decodedToken || !decodedToken.email) {
+        throw new UnauthorizedException('Invalid Firebase token');
       }
 
       const user = await this.userService.findOrCreateByGoogle(
-        payload.email,
-        payload.name || payload.email.split('@')[0],
-        payload.picture || '',
+        decodedToken.email,
+        decodedToken.name || decodedToken.email.split('@')[0],
+        decodedToken.picture || '',
       );
 
       return this.generateTokens(user);
     } catch (err) {
-      console.error('Google auth error:', err);
-      throw new UnauthorizedException('Invalid Google token');
+      console.error('Firebase auth error:', err);
+      throw new UnauthorizedException('Invalid Firebase token');
     }
   }
 
@@ -139,25 +110,7 @@ export class AuthService {
     return userProfile;
   }
 
-  /**
-   * Change Password
-   */
-  async changePassword(userId: string, oldPass: string, newPass: string) {
-    const user = await this.userService.findById(userId);
-    if (!user || !user.password_hash) {
-      throw new ConflictException('Cannot change password for OAuth accounts');
-    }
 
-    const isMatch = await bcrypt.compare(oldPass, user.password_hash);
-    if (!isMatch) {
-      throw new UnauthorizedException('Invalid old password');
-    }
-
-    const salt = await bcrypt.genSalt(12);
-    const newHash = await bcrypt.hash(newPass, salt);
-    await this.userService.update(userId, { password_hash: newHash });
-    return { success: true };
-  }
 
   /**
    * Delete Account

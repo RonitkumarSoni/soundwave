@@ -111,7 +111,9 @@ export function useAudioPlayer() {
         sound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
         soundInstance = sound;
       } catch (error: any) {
-        console.error("Error loading audio:", error);
+        console.warn("Error loading audio:", error);
+        // Pause playback so UI reflects that the track is not playing
+        usePlayerStore.getState().pause();
       }
     };
     

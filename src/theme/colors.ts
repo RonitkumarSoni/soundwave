@@ -51,4 +51,5 @@ export const borderRadius = {
   xxl: 24,
   xxxl: 28,
   pill: 9999,
+  full: 9999,
 };

@@ -6,6 +6,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { api } from '@/lib/api';
 import { colors, gradients, spacing } from '@/theme/colors';
+import { auth } from '@/lib/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -27,11 +29,15 @@ export default function ForgotPasswordScreen() {
     
     setIsLoading(true);
     try {
-      // Mocking the reset functionality for now
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await sendPasswordResetEmail(auth, email);
       setIsSent(true);
     } catch (err: any) {
-      const errorMsg = 'Unable to connect to our servers right now. Please try again later.';
+      let errorMsg = 'Unable to send password reset email right now. Please try again later.';
+      if (err.code === 'auth/user-not-found') {
+        errorMsg = 'No account found with this email address.';
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
       if (Platform.OS === 'web') {
         setAlertConfig({ visible: true, title: 'Error', message: errorMsg });
       } else {
@@ -45,13 +51,18 @@ export default function ForgotPasswordScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={["#7D5598", "#50568B", "#2E517E"]}
-        style={StyleSheet.absoluteFillObject}
+        colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
+        style={StyleSheet.absoluteFill}
       />
-      <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
 
       <View style={styles.content}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => {
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(auth)/login');
+          }
+        }}>
           <Feather name="chevron-left" size={28} color="#FFF" />
         </TouchableOpacity>
 
@@ -92,7 +103,13 @@ export default function ForgotPasswordScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity style={styles.loginButton} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.loginButton} onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(auth)/login');
+            }
+          }}>
             <LinearGradient
               colors={[gradients.primary[0], gradients.primary[1]]}
               start={{ x: 0, y: 0 }}
@@ -143,10 +160,12 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     paddingHorizontal: 16,
     height: 56,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
   },
   inputIcon: { marginRight: 12 },
   input: { flex: 1, color: '#FFF', fontSize: 16, height: '100%', outlineStyle: 'none' } as any,

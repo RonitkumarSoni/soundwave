@@ -103,7 +103,7 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
   };
 
   return (
-    <Animated.View entering={FadeInDown.delay(index * 60).duration(400)}>
+    <Animated.View entering={FadeInDown.delay((index % 12) * 50).duration(300)}>
       <TouchableOpacity
         style={styles.container}
         onPress={handlePlay}
@@ -178,7 +178,7 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
         transparent={true}
         onRequestClose={() => setMenuVisible(false)}
       >
-        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFillObject} />
+        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={styles.menuContainer}>
           <View style={styles.menuHeader}>
             <Image source={{ uri: track.image }} style={styles.menuCover} />

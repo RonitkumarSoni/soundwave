@@ -11,6 +11,7 @@ export interface Track {
   audio: string;
   audiodownload?: string;
   source?: string;
+  artist_id?: string;
 }
 
 interface PlayerState {

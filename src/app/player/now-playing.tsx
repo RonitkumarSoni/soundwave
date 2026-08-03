@@ -36,11 +36,21 @@ import { useSettingsStore } from "@/stores/useSettingsStore";
 import { seekGlobalAudio } from "@/hooks/useAudioPlayer";
 import { api } from "@/lib/api";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const COVER_SIZE = Math.min(SCREEN_WIDTH * 0.7, 320);
-const SIDE_COVER_SIZE = COVER_SIZE * 0.7;
+// Helper to get the actual bounded width for Web
+const getAppWidth = () => {
+  const windowWidth = Dimensions.get("window").width;
+  return Platform.OS === 'web' ? Math.min(windowWidth, 480) : windowWidth;
+};
 
 export default function NowPlayingScreen() {
+  const APP_WIDTH = getAppWidth();
+  const SCREEN_HEIGHT = Dimensions.get("window").height;
+  
+  // Make covers adapt to screen height so they don't cause overflow on short screens,
+  // but keep a generous minimum size (250) so they don't look tiny.
+  const availableHeight = SCREEN_HEIGHT - (Platform.OS === 'web' ? 380 : 380);
+  const COVER_SIZE = Math.max(250, Math.min(APP_WIDTH * 0.85, 360, availableHeight));
+  const SIDE_COVER_SIZE = COVER_SIZE * 0.7;
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -114,13 +124,13 @@ export default function NowPlayingScreen() {
   const parseLrc = (lrc: string) => {
     const lines = lrc.split('\n');
     const parsed = [];
-    const regex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
+    const regex = /\[(\d{2,}):(\d{2})(?:\.(\d{1,3}))?\](.*)/;
     for (const line of lines) {
       const match = line.match(regex);
       if (match) {
         const min = parseInt(match[1], 10);
         const sec = parseInt(match[2], 10);
-        const ms = parseInt(match[3].padEnd(3, '0'), 10);
+        const ms = match[3] ? parseInt(match[3].padEnd(3, '0'), 10) : 0;
         const time = min * 60 * 1000 + sec * 1000 + ms;
         const text = match[4].trim();
         if (text) {
@@ -136,11 +146,16 @@ export default function NowPlayingScreen() {
     if (!currentTrack || (plainLyrics || syncedLyrics)) return;
     setIsLoadingLyrics(true);
     try {
-      const result = await api.getLyrics(currentTrack.artist_name, currentTrack.name);
+      const result = await api.getLyrics(currentTrack.id, currentTrack.artist_name, currentTrack.name);
       if (result) {
         if (result.syncedLyrics) {
-          setSyncedLyrics(parseLrc(result.syncedLyrics));
-          setPlainLyrics(result.plainLyrics);
+          const parsed = parseLrc(result.syncedLyrics);
+          if (parsed.length > 0) {
+            setSyncedLyrics(parsed);
+            setPlainLyrics(result.plainLyrics);
+          } else {
+            setPlainLyrics(result.plainLyrics || "Lyrics not found for this track. Please try another song.");
+          }
         } else {
           setPlainLyrics(result.plainLyrics || "Lyrics not found for this track. Please try another song.");
         }
@@ -232,7 +247,10 @@ export default function NowPlayingScreen() {
     return (
       <View style={[styles.container, { justifyContent: "center", alignItems: "center", backgroundColor: "#0A0514" }]}>
         <Text style={{ color: "white", fontSize: 16 }}>No track selected</Text>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
+        <TouchableOpacity 
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/')} 
+          style={{ marginTop: 16 }}
+        >
           <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 16 }}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -312,21 +330,21 @@ export default function NowPlayingScreen() {
     <View style={styles.container}>
       <Animated.Image
         source={{ uri: track.image }}
-        style={[StyleSheet.absoluteFillObject, { width: "100%", height: "100%" }, bgAnimatedStyle]}
+        style={[{ position: Platform.OS === 'web' ? 'fixed' as any : 'absolute', top: 0, bottom: 0, left: 0, right: 0, width: "100%", height: "100%" }, bgAnimatedStyle]}
         blurRadius={Platform.OS === "web" ? 60 : 30}
         resizeMode="cover"
       />
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} />
+      <View style={[{ position: Platform.OS === 'web' ? 'fixed' as any : 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.45)" }]} />
       <LinearGradient
         colors={["rgba(0,0,0,0.6)", "transparent", "rgba(0,0,0,0.7)"]}
         locations={[0, 0.4, 1]}
-        style={StyleSheet.absoluteFillObject}
+        style={{ position: Platform.OS === 'web' ? 'fixed' as any : 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
       />
       {carMode ? (
         <View style={[styles.innerContainer, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 20, justifyContent: 'center' }]}>
           <TouchableOpacity
             style={{ position: 'absolute', top: insets.top + 10, left: spacing.lg }}
-            onPress={() => router.back()}
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
             activeOpacity={0.7}
           >
             <Feather name="chevron-left" size={32} color="#FFF" />
@@ -349,11 +367,11 @@ export default function NowPlayingScreen() {
           </View>
         </View>
       ) : (
-      <View {...panResponder.panHandlers} style={[styles.innerContainer, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 20 }]}>
+      <ScrollView {...panResponder.panHandlers} contentContainerStyle={[styles.innerContainer, { paddingTop: insets.top + (Platform.OS === 'web' ? 20 : 10), paddingBottom: insets.bottom + (Platform.OS === 'web' ? 40 : 20) }]} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <TouchableOpacity
             style={styles.topBarButton}
-            onPress={() => router.back()}
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
             activeOpacity={0.7}
           >
             <Feather name="chevron-left" size={24} color="#FFF" />
@@ -375,7 +393,7 @@ export default function NowPlayingScreen() {
         <View style={styles.coverCarousel}>
           {prevTrackData && (
             <TouchableOpacity
-              style={styles.sideCoverWrapper}
+              style={[styles.sideCoverWrapper, { width: SIDE_COVER_SIZE, height: SIDE_COVER_SIZE }]}
               activeOpacity={0.7}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); prevTrack(); }}
             >
@@ -383,13 +401,13 @@ export default function NowPlayingScreen() {
             </TouchableOpacity>
           )}
 
-          <View style={styles.mainCoverWrapper}>
+          <View style={[styles.mainCoverWrapper, { width: COVER_SIZE, height: COVER_SIZE }]}>
             <Image source={{ uri: track.image }} style={styles.mainCover} />
           </View>
 
           {nextTrackData && (
             <TouchableOpacity
-              style={styles.sideCoverWrapper}
+              style={[styles.sideCoverWrapper, { width: SIDE_COVER_SIZE, height: SIDE_COVER_SIZE }]}
               activeOpacity={0.7}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); nextTrack(); }}
             >
@@ -475,7 +493,7 @@ export default function NowPlayingScreen() {
         </View>
 
         {/* Bottom Actions Row */}
-        <View style={{ paddingHorizontal: spacing.lg }}>
+        <View style={{ paddingHorizontal: spacing.lg, paddingBottom: Platform.OS === 'web' ? 10 : 0 }}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, alignItems: 'center' }}>
             <TouchableOpacity activeOpacity={0.7} onPress={() => toggleDownload(currentTrack)} style={styles.queueButton}>
               <Ionicons name={downloadedTracks.some(t => t.id === currentTrack.id) ? "cloud-done" : "cloud-download-outline"} size={20} color={downloadedTracks.some(t => t.id === currentTrack.id) ? colors.accentSolid : "rgba(255,255,255,0.7)"} />
@@ -503,7 +521,7 @@ export default function NowPlayingScreen() {
             </TouchableOpacity>
           </ScrollView>
         </View>
-      </View>
+      </ScrollView>
       )}
 
       {/* Queue Modal */}
@@ -513,7 +531,7 @@ export default function NowPlayingScreen() {
         transparent={true}
         onRequestClose={() => setQueueVisible(false)}
       >
-        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFillObject} />
+        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={[styles.queueContainer, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
           <View style={styles.queueHeader}>
             <TouchableOpacity onPress={() => setQueueVisible(false)} style={styles.closeButton}>
@@ -571,7 +589,7 @@ export default function NowPlayingScreen() {
         transparent={true}
         onRequestClose={() => setPlaylistModalVisible(false)}
       >
-        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFillObject} />
+        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={[styles.queueContainer, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
           <View style={styles.queueHeader}>
             <TouchableOpacity onPress={() => setPlaylistModalVisible(false)} style={styles.closeButton}>
@@ -617,7 +635,7 @@ export default function NowPlayingScreen() {
         transparent={true}
         onRequestClose={() => setSleepTimerModalVisible(false)}
       >
-        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFillObject} />
+        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={[styles.queueContainer, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
           <View style={styles.queueHeader}>
             <TouchableOpacity onPress={() => setSleepTimerModalVisible(false)} style={styles.closeButton}>
@@ -668,7 +686,7 @@ export default function NowPlayingScreen() {
         transparent={true}
         onRequestClose={() => setLyricsModalVisible(false)}
       >
-        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFillObject} />
+        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={[styles.queueContainer, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
           <View style={styles.queueHeader}>
             <TouchableOpacity onPress={() => setLyricsModalVisible(false)} style={styles.closeButton}>
@@ -717,9 +735,11 @@ export default function NowPlayingScreen() {
                 ))}
               </View>
             ) : (
-              <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 22, lineHeight: 36, fontWeight: '600', textAlign: 'center' }}>
-                {isTranslated ? translatedLyrics : plainLyrics || "Loading..."}
-              </Text>
+              <View style={{ paddingBottom: 150 }}>
+                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 22, lineHeight: 36, fontWeight: '600', textAlign: 'center' }}>
+                  {isTranslated ? translatedLyrics : plainLyrics || "Loading..."}
+                </Text>
+              </View>
             )}
           </ScrollView>
         </View>
@@ -731,9 +751,11 @@ export default function NowPlayingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    height: "100%",
+    overflow: "hidden", // Prevent ugly web scrollbars
   },
   innerContainer: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: "space-between",
   },
   topBar: {
@@ -757,17 +779,17 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.8)",
     letterSpacing: 0.5,
   },
-  // Cover carousel
   coverCarousel: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.md,
     marginVertical: spacing.md,
+    // Add overflow hidden to prevent completely breaking the flex layout if side covers spill
+    overflow: "hidden", 
+    width: "100%",
   },
   sideCoverWrapper: {
-    width: SIDE_COVER_SIZE,
-    height: SIDE_COVER_SIZE,
     borderRadius: 16,
     overflow: "hidden",
     opacity: 0.5,
@@ -779,8 +801,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   mainCoverWrapper: {
-    width: COVER_SIZE,
-    height: COVER_SIZE,
     borderRadius: 24,
     overflow: "hidden",
     shadowColor: "#000",

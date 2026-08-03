@@ -1,197 +1,247 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform, KeyboardAvoidingView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
+import { Ionicons, Feather } from '@expo/vector-icons';
+import { colors, gradients, spacing } from '@/theme/colors';
+import { PasswordStrengthBar } from '@/components/PasswordStrengthBar';
+import { auth } from '@/lib/firebase';
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification, fetchSignInMethodsForEmail } from 'firebase/auth';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { colors, gradients, spacing } from '@/theme/colors';
 
-WebBrowser.maybeCompleteAuthSession();
+type Step = 'email' | 'password' | 'profile';
 
 export default function SignupScreen() {
   const router = useRouter();
   const setAuthData = useAuthStore((s) => s.setAuthData);
   
-  const [displayName, setDisplayName] = useState('');
+  const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [alertConfig, setAlertConfig] = useState<{ visible: boolean, title: string, message: string }>({ visible: false, title: '', message: '' });
+  const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '' });
 
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: '1000779968838-njj6ttdbb8el9oouk3v42k6dlpvfne1b.apps.googleusercontent.com',
-    webClientId: '1000779968838-njj6ttdbb8el9oouk3v42k6dlpvfne1b.apps.googleusercontent.com',
-  });
-
-  React.useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      handleGoogleSignup(id_token);
+  const showError = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      setAlertConfig({ visible: true, title, message });
+    } else {
+      Alert.alert(title, message);
     }
-  }, [response]);
+  };
 
-  const handleGoogleSignup = async (idToken: string) => {
+  const handleNextFromEmail = async () => {
+    const trimmedEmail = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      showError('Invalid Email', 'Please enter a valid email address.');
+      return;
+    }
+    
     try {
       setIsLoading(true);
-      const data = await api.auth.googleLogin(idToken);
-      await setAuthData(data);
-      router.replace('/(home)');
-    } catch (err: any) {
-      let errorMsg = 'Unable to connect to our servers right now. Please try again later.';
-      const msg = err.response?.data?.message;
-      if (msg && typeof msg === 'string' && !msg.startsWith('<') && !msg.startsWith('Cannot ')) {
-        errorMsg = msg;
-      } else if (Array.isArray(msg)) {
-        errorMsg = msg.join(', ');
+      try {
+        const methods = await fetchSignInMethodsForEmail(auth, trimmedEmail);
+        if (methods && methods.length > 0) {
+          showError('Account Exists', 'This email is already registered. Please log in instead.');
+          setIsLoading(false);
+          return;
+        }
+      } catch (e) {
+        // If email enumeration protection is enabled in Firebase, proceed gracefully
       }
-      if (Platform.OS === 'web') {
-        setAlertConfig({ visible: true, title: 'Sign Up Failed', message: errorMsg });
-      } else {
-        Alert.alert('Sign Up Failed', errorMsg);
-      }
+      setStep('password');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleNextFromPassword = () => {
+    const hasMinLength = password.length >= 8;
+    const hasLetterAndNumber = /(?=.*[a-zA-Z])(?=.*[0-9])/.test(password);
+    
+    if (!hasMinLength || !hasLetterAndNumber) {
+      showError('Weak Password', 'Please ensure your password meets all requirements.');
+      return;
+    }
+    setStep('profile');
+  };
+
   const handleSignup = async () => {
-    if (!email || !password || !displayName) {
-      if (Platform.OS === 'web') {
-        setAlertConfig({ visible: true, title: 'Missing Fields', message: 'Please fill in all fields to create your account.' });
-      } else {
-        Alert.alert('Missing Fields', 'Please fill in all fields to create your account.');
-      }
+    if (!displayName.trim()) {
+      showError('Missing Field', 'Please enter your name.');
       return;
     }
-    if (password.length < 6) {
-      if (Platform.OS === 'web') {
-        setAlertConfig({ visible: true, title: 'Weak Password', message: 'Password must be at least 6 characters for your security.' });
-      } else {
-        Alert.alert('Weak Password', 'Password must be at least 6 characters for your security.');
-      }
-      return;
-    }
+
     try {
       setIsLoading(true);
-      const data = await api.auth.signup(email, password, displayName);
-      await setAuthData(data);
-      router.replace('/(home)');
-    } catch (err: any) {
-      let errorMsg = 'Unable to connect to our servers right now. Please try again later.';
-      if (err.response?.status === 409) {
-        errorMsg = 'An account with this email already exists. Please log in instead.';
-      } else {
-        const msg = err.response?.data?.message;
-        if (msg && typeof msg === 'string' && !msg.startsWith('<') && !msg.startsWith('Cannot ')) {
-          errorMsg = msg;
-        } else if (Array.isArray(msg)) {
-          errorMsg = msg.join(', ');
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, { displayName: displayName.trim() });
+        try {
+          await sendEmailVerification(userCredential.user);
+        } catch (e) {
+          console.warn("Email verification send warning:", e);
         }
       }
-      if (Platform.OS === 'web') {
-        setAlertConfig({ visible: true, title: 'Sign Up Failed', message: errorMsg });
-      } else {
-        Alert.alert('Sign Up Failed', errorMsg);
+
+      const firebaseIdToken = await userCredential.user.getIdToken();
+      const data = await api.auth.firebaseLogin(firebaseIdToken);
+      await setAuthData(data);
+      
+      router.replace('/(auth)/verify-email');
+    } catch (err: any) {
+      let errorMsg = 'Unable to create account right now. Please try again later.';
+      if (err.code === 'auth/email-already-in-use') {
+        errorMsg = 'An account with this email already exists. Please log in instead.';
+        setStep('email');
+      } else if (err.message) {
+        errorMsg = err.message;
       }
+      showError('Sign Up Failed', errorMsg);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={["#7D5598", "#50568B", "#2E517E"]}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <LinearGradient colors={[gradients.background[0], gradients.background[1], gradients.background[2]]} style={StyleSheet.absoluteFill} />
+      
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => {
+            if (step === 'profile') setStep('password');
+            else if (step === 'password') setStep('email');
+            else {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(auth)/welcome');
+              }
+            }
+          }}
+        >
+          <Feather name="chevron-left" size={28} color="#FFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Create account</Text>
+      </View>
+
+      <View style={styles.progressContainer}>
+        <View style={[styles.progressBar, step === 'email' && styles.progressActive]} />
+        <View style={[styles.progressBar, step === 'password' && styles.progressActive]} />
+        <View style={[styles.progressBar, step === 'profile' && styles.progressActive]} />
+      </View>
 
       <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Sign up to get started</Text>
-        </View>
+        {step === 'email' && (
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepTitle}>What's your email?</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                autoFocus
+                placeholder="Enter your email"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+            <Text style={styles.helperText}>You'll need to confirm this email later.</Text>
+            
+            <TouchableOpacity style={styles.nextButton} onPress={handleNextFromEmail} disabled={isLoading}>
+              <LinearGradient
+                colors={[gradients.primary[0], gradients.primary[1]]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFill}
+              />
+              {isLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.nextButtonText}>Next</Text>}
+            </TouchableOpacity>
 
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Ionicons name="person-outline" size={20} color="rgba(255,255,255,0.7)" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Display Name"
-              placeholderTextColor="rgba(255,255,255,0.5)"
-              value={displayName}
-              onChangeText={setDisplayName}
-            />
+            <View style={styles.loginContainer}>
+              <Text style={styles.loginText}>Already have an account? </Text>
+              <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
+                <Text style={styles.loginLink}>Log in</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+        )}
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color="rgba(255,255,255,0.7)" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="rgba(255,255,255,0.5)"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
+        {step === 'password' && (
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepTitle}>Create a password</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                autoFocus
+                placeholder="Enter password"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={24} color="rgba(255,255,255,0.7)" />
+              </TouchableOpacity>
+            </View>
+            
+            <PasswordStrengthBar password={password} />
 
-          <View style={styles.inputContainer}>
-            <Ionicons name="lock-closed-outline" size={20} color="rgba(255,255,255,0.7)" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="rgba(255,255,255,0.5)"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="rgba(255,255,255,0.7)" />
+            <TouchableOpacity style={styles.nextButton} onPress={handleNextFromPassword}>
+              <LinearGradient
+                colors={[gradients.primary[0], gradients.primary[1]]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <Text style={styles.nextButtonText}>Next</Text>
             </TouchableOpacity>
           </View>
+        )}
 
-          <TouchableOpacity style={styles.signupButton} onPress={handleSignup} disabled={isLoading}>
-            <LinearGradient
-              colors={[gradients.primary[0], gradients.primary[1]]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.gradientButton}
-            >
-              {isLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.signupButtonText}>Sign Up</Text>}
-            </LinearGradient>
-          </TouchableOpacity>
+        {step === 'profile' && (
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepTitle}>What's your name?</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                autoFocus
+                placeholder="Display name"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                value={displayName}
+                onChangeText={setDisplayName}
+              />
+            </View>
+            <Text style={styles.helperText}>This appears on your profile.</Text>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity 
-            style={styles.googleButton} 
-            onPress={() => promptAsync()}
-            disabled={!request || isLoading}
-          >
-            <Ionicons name="logo-google" size={20} color="#FFF" style={styles.googleIcon} />
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account? </Text>
-          <Link href="/(auth)/login" asChild>
-            <TouchableOpacity>
-              <Text style={styles.footerLink}>Log In</Text>
+            <View style={styles.termsContainer}>
+              <Text style={styles.termsText}>
+                By tapping "Create account", you agree to the Soundwave Terms of Service and Privacy Policy.
+              </Text>
+            </View>
+            
+            <TouchableOpacity style={styles.nextButton} onPress={handleSignup} disabled={isLoading}>
+              <LinearGradient
+                colors={[gradients.primary[0], gradients.primary[1]]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFill}
+              />
+              {isLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.nextButtonText}>Create account</Text>}
             </TouchableOpacity>
-          </Link>
-        </View>
+          </View>
+        )}
       </View>
 
       {Platform.OS === 'web' && alertConfig.visible && (
@@ -206,48 +256,121 @@ export default function SignupScreen() {
           </View>
         </View>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, padding: spacing.xxl, justifyContent: 'center' },
-  header: { alignItems: 'flex-start', marginBottom: 40 },
-  title: { fontSize: 32, fontWeight: 'bold', color: '#FFF' },
-  subtitle: { fontSize: 16, color: 'rgba(255,255,255,0.7)', marginTop: 8 },
-  form: { gap: 16 },
+  container: { flex: 1, backgroundColor: '#000' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    marginLeft: -8,
+  },
+  headerTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    paddingRight: 32, // to offset back button and center title
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 8,
+    marginBottom: 24,
+  },
+  progressBar: {
+    flex: 1,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+  },
+  progressActive: {
+    backgroundColor: colors.accentStart,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  stepContainer: {
+    flex: 1,
+  },
+  stepTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFF',
+    marginBottom: 24,
+    letterSpacing: -0.5,
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
     paddingHorizontal: 16,
-    height: 56,
-  },
-  inputIcon: { marginRight: 12 },
-  input: { flex: 1, color: '#FFF', fontSize: 16, height: '100%', outlineStyle: 'none' } as any,
-  signupButton: { borderRadius: 16, overflow: 'hidden', marginTop: 8 },
-  gradientButton: { height: 56, justifyContent: 'center', alignItems: 'center' },
-  signupButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
-  dividerText: { color: 'rgba(255,255,255,0.5)', paddingHorizontal: 16, fontSize: 14 },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    height: 56,
-    borderRadius: 16,
+    height: 60,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: colors.surfaceBorder,
   },
-  googleIcon: { marginRight: 12 },
-  googleButtonText: { color: '#FFF', fontSize: 16, fontWeight: '500' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 40 },
-  footerText: { color: 'rgba(255,255,255,0.7)', fontSize: 14 },
-  footerLink: { color: colors.accentStart, fontSize: 14, fontWeight: '600' },
+  input: {
+    flex: 1,
+    color: '#FFF',
+    fontSize: 18,
+    height: '100%',
+    outlineStyle: 'none',
+  } as any,
+  helperText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    marginBottom: 32,
+  },
+  nextButton: {
+    borderRadius: 30,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 16,
+    overflow: 'hidden',
+  },
+  nextButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  termsContainer: {
+    marginTop: 'auto',
+    marginBottom: 24,
+  },
+  termsText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  loginContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  loginText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+  },
+  loginLink: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   alertBox: {
     backgroundColor: 'rgba(30, 30, 30, 0.95)',
     borderRadius: 20,

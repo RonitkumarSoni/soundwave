@@ -105,7 +105,7 @@ export default function SettingsScreen() {
     <View style={styles.container}>
       <LinearGradient
         colors={["#170B2E", "#0A0514"]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
       
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>

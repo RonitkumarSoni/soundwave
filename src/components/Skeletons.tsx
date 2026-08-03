@@ -91,6 +91,43 @@ export function PlaylistHeaderSkeleton() {
   );
 }
 
+export function AppHeaderSkeleton() {
+  return (
+    <View style={styles.appHeader}>
+      <View style={styles.appHeaderTopRow}>
+        <Skeleton width={36} height={36} borderRadius={18} />
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <Skeleton width={36} height={36} borderRadius={18} />
+          <Skeleton width={36} height={36} borderRadius={18} />
+          <Skeleton width={36} height={36} borderRadius={18} />
+        </View>
+      </View>
+      <Skeleton width={180} height={26} style={{ marginTop: spacing.xs }} />
+    </View>
+  );
+}
+
+export function FilterChipsSkeleton() {
+  return (
+    <View style={styles.filterChipsContainer}>
+      <Skeleton width={60} height={32} borderRadius={16} />
+      <Skeleton width={90} height={32} borderRadius={16} />
+      <Skeleton width={90} height={32} borderRadius={16} />
+      <Skeleton width={80} height={32} borderRadius={16} />
+    </View>
+  );
+}
+
+export function ForYouSkeleton() {
+  const MAX_CARD_WIDTH = 340; 
+  const CARD_WIDTH = Math.min(SCREEN_WIDTH - spacing.lg * 2, MAX_CARD_WIDTH);
+  return (
+    <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
+      <Skeleton width={CARD_WIDTH} height={180} borderRadius={24} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   skeleton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -122,5 +159,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
     paddingHorizontal: spacing.md,
+  },
+  appHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  appHeaderTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  filterChipsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   }
 });

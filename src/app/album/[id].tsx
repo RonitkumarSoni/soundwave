@@ -56,7 +56,7 @@ export default function AlbumDetailScreen() {
     <View style={styles.headerContainer}>
       <LinearGradient
         colors={[gradients.background[0], gradients.background[1]]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
       
       <View style={[styles.headerActions, { top: insets.top + spacing.md }]}>
@@ -96,7 +96,7 @@ export default function AlbumDetailScreen() {
       <View style={styles.container}>
         <LinearGradient
           colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
         />
         <View style={{ paddingTop: insets.top + spacing.xl }}>
           <PlaylistHeaderSkeleton />
@@ -114,7 +114,7 @@ export default function AlbumDetailScreen() {
     <View style={styles.container}>
       <LinearGradient
         colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
 
       <FlatList

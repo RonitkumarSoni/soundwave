@@ -95,7 +95,7 @@ export default function ArtistDetailScreen() {
       <View style={styles.container}>
         <LinearGradient
           colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
         />
         <View style={{ paddingTop: insets.top + spacing.xl }}>
           <PlaylistHeaderSkeleton />
@@ -113,7 +113,7 @@ export default function ArtistDetailScreen() {
     <View style={styles.container}>
       <LinearGradient
         colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
 
       <FlatList
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     contentFit: 'cover',
   },
   imageGradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   headerActions: {
     position: 'absolute',

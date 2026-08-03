@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { View, Text, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Tabs, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Audio } from "expo-av";
 import { BottomNav } from "@/components/BottomNav";
@@ -85,8 +85,8 @@ export default function RootLayout() {
     const inOnboarding = segments[0] === 'onboarding';
     
     if (!isLoggedIn && !inAuthGroup) {
-      // Redirect to login if not logged in
-      router.replace('/(auth)/login');
+      // Redirect to welcome if not logged in
+      router.replace('/(auth)/welcome');
     } else if (isLoggedIn && inAuthGroup) {
       // Redirect to home if logged in but trying to access auth screens
       router.replace('/(home)');
@@ -145,39 +145,28 @@ export default function RootLayout() {
     }
   `;
 
-  // If not logged in, just render the stack so (auth) routes work without BottomNav
-  if (!isLoggedIn) {
-    return (
-      <View style={styles.container}>
-        {Platform.OS === 'web' && <style dangerouslySetInnerHTML={{ __html: globalCss }} />}
-        <StatusBar style="light" translucent backgroundColor="transparent" />
-        <Tabs screenOptions={{ headerShown: false, tabBarStyle: { display: "none" } }}>
-          <Tabs.Screen name="(auth)" options={{ title: "Auth" }} />
-        </Tabs>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       {Platform.OS === 'web' && <style dangerouslySetInnerHTML={{ __html: globalCss }} />}
       <StatusBar style="light" translucent backgroundColor="transparent" />
-      <Tabs
+      <Stack
         screenOptions={{
           headerShown: false,
-          tabBarStyle: { display: "none" },
+          animation: 'fade',
         }}
       >
-        <Tabs.Screen name="(home)" options={{ title: "Home" }} />
-        <Tabs.Screen name="(search)" options={{ title: "Search" }} />
-        <Tabs.Screen name="(library)" options={{ title: "Library" }} />
-        <Tabs.Screen name="(settings)" options={{ title: "Settings" }} />
-        <Tabs.Screen name="(premium)" options={{ title: "Premium" }} />
-        <Tabs.Screen
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="(home)" />
+        <Stack.Screen name="(search)" />
+        <Stack.Screen name="(library)" />
+        <Stack.Screen name="(settings)" />
+        <Stack.Screen name="(premium)" />
+        <Stack.Screen
           name="player/now-playing"
-          options={{ title: "Now Playing" }}
+          options={{ presentation: 'modal' }}
         />
-      </Tabs>
+      </Stack>
 
       {/* Custom floating UI — hidden during Now Playing or Onboarding */}
       {!isNowPlaying && !isOnboarding && (

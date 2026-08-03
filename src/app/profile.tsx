@@ -45,7 +45,7 @@ export default function PublicProfileScreen() {
     <View style={styles.container}>
       <LinearGradient
         colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
 
       <ScrollView 

@@ -479,7 +479,7 @@ export default function SearchScreen() {
 
       {/* Listening Modal */}
       <Modal visible={isListening} transparent animationType="fade">
-        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFillObject} />
+        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <View style={{
             width: 120, height: 120, borderRadius: 60, 
@@ -510,7 +510,7 @@ export default function SearchScreen() {
         transparent={true}
         onRequestClose={() => setShowScanner(false)}
       >
-        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFillObject} />
+        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '600', marginBottom: spacing.xl }}>Scan Soundwave Code</Text>
           

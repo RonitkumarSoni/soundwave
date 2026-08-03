@@ -42,7 +42,7 @@ export default function UserProfileScreen() {
     <View style={styles.headerContainer}>
       <LinearGradient
         colors={[gradients.background[0], gradients.background[1]]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
       
       <View style={[styles.headerActions, { top: insets.top + spacing.md }]}>
@@ -82,7 +82,7 @@ export default function UserProfileScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
-        <LinearGradient colors={[gradients.background[0], gradients.background[1]]} style={StyleSheet.absoluteFillObject} />
+        <LinearGradient colors={[gradients.background[0], gradients.background[1]]} style={StyleSheet.absoluteFill} />
         <ActivityIndicator size="large" color={colors.accentSolid} />
       </View>
     );
@@ -92,7 +92,7 @@ export default function UserProfileScreen() {
     <View style={styles.container}>
       <LinearGradient
         colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
 
       <FlatList

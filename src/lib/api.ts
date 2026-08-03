@@ -9,10 +9,17 @@ const API_BASE = process.env.EXPO_PUBLIC_API_URL || "https://soundwave-backend-p
 // Helper for bypassing CORS on Web
 const getProxiedUrl = (url: string) => {
   if (Platform.OS === 'web') {
-    // We use the configured backend as a proxy because public ones get blocked by JioSaavn CORS
     return `${API_BASE}/catalog/proxy?url=${encodeURIComponent(url)}`;
   }
   return url;
+};
+
+const formatImageUrl = (url?: string) => {
+  if (!url || url.includes('placeholder') || url.includes('via.placeholder')) {
+    return 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500&auto=format&fit=crop&q=80';
+  }
+  let clean = url.replace('http:', 'https:');
+  return clean.replace('150x150', '500x500').replace('50x50', '500x500').replace('80x80', '500x500');
 };
 
 // Retry helper for Render cold start
@@ -72,7 +79,17 @@ apiClient.interceptors.response.use(
         await AsyncStorage.removeItem('access_token');
         await AsyncStorage.removeItem('refresh_token');
         await AsyncStorage.removeItem('user_profile');
-        // Let the application layer handle the logout (e.g. useAuthStore)
+        
+        // Reset auth store state to trigger redirect to login
+        try {
+          const { useAuthStore } = require('@/stores/useAuthStore');
+          if (useAuthStore && useAuthStore.getState) {
+            useAuthStore.getState().logout();
+          }
+        } catch (e) {
+          console.error('Failed to reset auth store', e);
+        }
+        
         return Promise.reject(refreshError);
       }
     }
@@ -94,9 +111,9 @@ export const api = {
         return data;
       });
     },
-    googleLogin: async (id_token: string) => {
+    firebaseLogin: async (id_token: string) => {
       return withRetry(async () => {
-        const { data } = await apiClient.post('/auth/google', { id_token });
+        const { data } = await apiClient.post('/auth/firebase', { id_token });
         return data;
       });
     },
@@ -139,7 +156,7 @@ export const api = {
           name: song.song || song.title,
           artist_name: song.primary_artists || song.singers || 'Unknown Artist',
           album_name: song.album || '',
-          image: song.image ? song.image.replace('150x150', '500x500') : 'https://via.placeholder.com/150',
+          image: formatImageUrl(song.image),
           audio: mediaUrl,
           duration: song.duration ? parseInt(song.duration, 10) : 0,
           source: 'jiosaavn'
@@ -155,11 +172,13 @@ export const api = {
 
   getTracks: async () => {
     try {
-      // Get trending tracks using a generic popular query on JioSaavn
-      const url = `https://www.jiosaavn.com/api.php?__call=search.getResults&q=top&n=20&p=1&_format=json&_marker=0&ctx=android`;
+      // Use verified official artist IDs
+      const artistIds = ["459320", "456323", "456269", "568565", "461645", "4179092", "467129", "455120", "468241", "482914"];
+      const artistId = artistIds[Math.floor(Math.random() * artistIds.length)];
+      const url = `https://www.jiosaavn.com/api.php?__call=artist.getArtistPageDetails&artistId=${artistId}&_format=json&_marker=0&ctx=android`;
       const { data } = await axios.get(getProxiedUrl(url));
       
-      const tracks = (data.results || []).map((song: any) => {
+      const tracks = (data.topSongs?.songs || []).slice(0, 20).map((song: any) => {
         let mediaUrl = "";
         try {
           if (song.encrypted_media_url) {
@@ -180,9 +199,10 @@ export const api = {
           name: song.song || song.title,
           artist_name: song.primary_artists || song.singers || 'Unknown Artist',
           album_name: song.album || '',
-          image: song.image ? song.image.replace('150x150', '500x500') : 'https://via.placeholder.com/150',
+          image: formatImageUrl(song.image),
           audio: mediaUrl,
           duration: song.duration ? parseInt(song.duration, 10) : 0,
+          artist_id: artistId,
           source: 'jiosaavn'
         };
       });
@@ -206,38 +226,57 @@ export const api = {
 
   getPopular: async (limit = 10, offset = 0, order = 'popularity_week') => {
     try {
-      const url = `https://www.jiosaavn.com/api.php?__call=search.getResults&q=popular&n=${limit}&p=${Math.floor(offset / limit) + 1}&_format=json&_marker=0&ctx=android`;
-      const { data } = await axios.get(getProxiedUrl(url));
+      const diverseTracks: any[] = [];
+      const usedImages = new Set<string>();
       
-      const tracks = (data.results || []).map((song: any) => {
-        let mediaUrl = "";
-        try {
-          if (song.encrypted_media_url) {
-            const key = CryptoJS.enc.Utf8.parse("38346591");
-            const decrypted = CryptoJS.DES.decrypt(
-                { ciphertext: CryptoJS.enc.Base64.parse(song.encrypted_media_url) } as any,
-                key,
-                { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }
-            );
-            mediaUrl = decrypted.toString(CryptoJS.enc.Utf8).replace('_96.mp4', '_320.mp4');
+      const page = Math.floor(offset / limit) + 1;
+      let query = "Top Hits";
+      if (order === "releasedate") query = "New Releases";
+      if (order === "popularity_total") query = "Trending";
+
+      const url = `https://www.jiosaavn.com/api.php?__call=search.getResults&q=${encodeURIComponent(query)}&n=30&p=${page}&_format=json&_marker=0&ctx=android`;
+      
+      try {
+        const { data } = await axios.get(getProxiedUrl(url));
+        
+        (data.results || []).forEach((song: any) => {
+          const image = formatImageUrl(song.image);
+          if (!usedImages.has(image) && diverseTracks.length < limit) {
+            usedImages.add(image);
+
+            let mediaUrl = "";
+            try {
+              if (song.encrypted_media_url) {
+                const key = CryptoJS.enc.Utf8.parse("38346591");
+                const decrypted = CryptoJS.DES.decrypt(
+                    { ciphertext: CryptoJS.enc.Base64.parse(song.encrypted_media_url) } as any,
+                    key,
+                    { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }
+                );
+                mediaUrl = decrypted.toString(CryptoJS.enc.Utf8).replace('_96.mp4', '_320.mp4');
+              } else if (song.media_preview_url) {
+                mediaUrl = song.media_preview_url.replace('preview.saavncdn.com', 'aac.saavncdn.com').replace('_96_p', '_320');
+              }
+            } catch (e) {}
+
+            diverseTracks.push({
+              id: song.id,
+              name: song.song || song.title,
+              artist_name: song.primary_artists || song.singers || 'Unknown Artist',
+              album_name: song.album || '',
+              image: image,
+              audio: mediaUrl,
+              duration: song.duration ? parseInt(song.duration, 10) : 0,
+              artist_id: song.primary_artists_id?.split(',')[0] || '',
+              source: 'jiosaavn'
+            });
           }
-        } catch (e) {
-          console.error("Failed to decrypt media url", e);
-        }
+        });
+      } catch (e) {
+        console.error(`Failed to fetch popular tracks for ${query}`, e);
+      }
 
-        return {
-          id: song.id,
-          name: song.song || song.title,
-          artist_name: song.primary_artists || song.singers || 'Unknown Artist',
-          album_name: song.album || '',
-          image: song.image ? song.image.replace('150x150', '500x500') : 'https://via.placeholder.com/150',
-          audio: mediaUrl,
-          duration: song.duration ? parseInt(song.duration, 10) : 0,
-          source: 'jiosaavn'
-        };
-      });
-
-      return tracks;
+      return diverseTracks;
     } catch (error) {
       console.error('GetPopular API error:', error);
       return [];
@@ -257,10 +296,32 @@ export const api = {
 
   getArtists: async (limit = 10, offset = 0) => {
     try {
-      const { data } = await apiClient.get('/catalog/artists', { params: { limit, offset } });
-      return data.results || [];
-    } catch (error) {
-      console.error('GetArtists API error:', error);
+      // Curated list of top global/Indian artist IDs on JioSaavn
+      const topArtistIds = [
+        "459320", // Arijit Singh
+        "456323", // Shreya Ghoshal
+        "459633", // Atif Aslam
+        "456269", // AR Rahman
+        "568565", // Neha Kakkar
+        "461645", // Badshah
+        "455120", // The Weeknd
+        "468241", // Taylor Swift
+        "467129", // Ed Sheeran
+        "482914", // Billie Eilish
+        "4179092", // Justin Bieber
+        "1084252" // BTS
+      ];
+      
+      const selectedIds = topArtistIds.slice(offset, offset + limit);
+      if (selectedIds.length === 0) return [];
+
+      const artists = await Promise.all(
+        selectedIds.map(id => api.getArtistById(id))
+      );
+      
+      return artists.filter(Boolean);
+    } catch (error: any) {
+      console.warn('GetArtists API error:', error.message);
       return [];
     }
   },
@@ -273,7 +334,7 @@ export const api = {
         id: data.artistId,
         name: data.name,
         bio: data.subtitle,
-        image: data.image ? data.image.replace('150x150', '500x500') : '',
+        image: formatImageUrl(data.image),
         follower_count: data.follower_count
       };
     } catch (error) {
@@ -308,7 +369,7 @@ export const api = {
           name: song.song || song.title,
           artist_name: song.primary_artists || song.singers || data.name,
           album_name: song.album || '',
-          image: song.image ? song.image.replace('150x150', '500x500') : 'https://via.placeholder.com/150',
+          image: formatImageUrl(song.image),
           audio: mediaUrl,
           duration: song.duration ? parseInt(song.duration, 10) : 0,
           source: 'jiosaavn'
@@ -330,7 +391,7 @@ export const api = {
         id: data.albumid,
         title: data.title || data.name,
         artist: data.primary_artists,
-        image: data.image ? data.image.replace('150x150', '500x500') : '',
+        image: formatImageUrl(data.image),
         year: data.year
       };
     } catch (error) {
@@ -365,7 +426,7 @@ export const api = {
           name: song.song || song.title,
           artist_name: song.primary_artists || song.singers || 'Unknown Artist',
           album_name: song.album || data.title || data.name || '',
-          image: song.image ? song.image.replace('150x150', '500x500') : 'https://via.placeholder.com/150',
+          image: formatImageUrl(song.image),
           audio: mediaUrl,
           duration: song.duration ? parseInt(song.duration, 10) : 0,
           source: 'jiosaavn'
@@ -386,10 +447,12 @@ export const api = {
     },
     getAll: async () => {
       try {
-        const { data } = await apiClient.get('/playlists');
-        return data;
+        return await withRetry(async () => {
+          const { data } = await apiClient.get('/playlists');
+          return data;
+        });
       } catch (error) {
-        console.error('getPlaylists API error:', error);
+        console.log('getPlaylists API error:', error);
         return [];
       }
     },
@@ -415,22 +478,95 @@ export const api = {
     }
   },
   
-  getLyrics: async (artist: string, title: string) => {
+  getLyrics: async (trackId: string, artist: string, title: string) => {
     try {
-      const cleanArtist = artist.split(',')[0].trim();
-      const cleanTitle = title.split('(')[0].trim();
-      
-      const url = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(cleanArtist)}&track_name=${encodeURIComponent(cleanTitle)}`;
-      const { data } = await axios.get(url);
-      
-      if (data && data.length > 0) {
-        // Prefer syncedLyrics, fallback to plainLyrics
-        return {
-          syncedLyrics: data[0].syncedLyrics || null,
-          plainLyrics: data[0].plainLyrics || null,
-        };
+      const cleanArtist = (artist || '').split(',')[0].split('&')[0].trim();
+      const cleanTitle = (title || '').split('(')[0].split('-')[0].trim();
+      const headers = { 'User-Agent': 'Soundwave/1.0 (https://github.com/soundwave)' };
+
+      // Helper to clean HTML entities from JioSaavn
+      const cleanHtmlLyrics = (html: string) => {
+        if (!html) return '';
+        return html
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<[^>]*>/g, '')
+          .replace(/&quot;/g, '"')
+          .replace(/&#039;/g, "'")
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .trim();
+      };
+
+      // 1. Try LRCLIB Exact Match first (100% accurate for Hollywood & Global tracks)
+      try {
+        const getUrl = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(cleanArtist)}&track_name=${encodeURIComponent(cleanTitle)}`;
+        const { data: exactData } = await axios.get(getUrl, { headers, timeout: 8000 });
+        if (exactData && (exactData.syncedLyrics || exactData.plainLyrics)) {
+          return {
+            syncedLyrics: exactData.syncedLyrics || null,
+            plainLyrics: exactData.plainLyrics || null,
+          };
+        }
+      } catch (e) {
+        // Continue to JioSaavn if exact LRCLIB fails
       }
-      
+
+      // 2. Try JioSaavn for Bollywood/Indian tracks (if trackId exists and is valid)
+      if (trackId && !trackId.toString().includes('.')) {
+        try {
+          const jioUrl = `https://www.jiosaavn.com/api.php?__call=lyrics.getLyrics&lyrics_id=${trackId}&ctx=web6dot0&api_version=4&_format=json&_marker=0`;
+          const { data: jioData } = await axios.get(getProxiedUrl(jioUrl), { timeout: 8000 });
+          
+          let lyricsText = "";
+          if (jioData?.lyrics_cdn_uri) {
+            try {
+              const { data: lrcData } = await axios.get(getProxiedUrl(jioData.lyrics_cdn_uri), { timeout: 8000 });
+              if (typeof lrcData === 'string' && lrcData.length > 20) {
+                lyricsText = lrcData;
+              }
+            } catch (lrcErr) {}
+          }
+          
+          if (!lyricsText && jioData?.lyrics) {
+            lyricsText = cleanHtmlLyrics(jioData.lyrics);
+          }
+
+          if (lyricsText && lyricsText.length > 20 && !lyricsText.toLowerCase().includes('not available')) {
+            return {
+              syncedLyrics: lyricsText.includes('[00:') ? lyricsText : null,
+              plainLyrics: lyricsText.replace(/\[\d+:\d+\.\d+\]/g, '').trim(),
+            };
+          }
+        } catch (e) {
+          // Fallthrough
+        }
+      }
+
+      // 3. Fallback to LRCLIB Search with strict verification
+      try {
+        const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(cleanTitle + ' ' + cleanArtist)}`;
+        const { data } = await axios.get(getProxiedUrl(searchUrl), { headers, timeout: 8000 });
+        
+        if (data && data.length > 0) {
+          // Find match that contains both track title and artist name to avoid wrong lyrics
+          const verifiedMatch = data.find((t: any) => {
+            const tMatch = t.trackName.toLowerCase().includes(cleanTitle.toLowerCase()) || cleanTitle.toLowerCase().includes(t.trackName.toLowerCase());
+            const aMatch = t.artistName.toLowerCase().includes(cleanArtist.toLowerCase()) || cleanArtist.toLowerCase().includes(t.artistName.toLowerCase());
+            return tMatch && aMatch;
+          });
+
+          if (verifiedMatch && (verifiedMatch.syncedLyrics || verifiedMatch.plainLyrics)) {
+            return {
+              syncedLyrics: verifiedMatch.syncedLyrics || null,
+              plainLyrics: verifiedMatch.plainLyrics || null,
+            };
+          }
+        }
+      } catch (e) {
+        // Fallthrough
+      }
+
       return null;
     } catch (error) {
       console.log('getLyrics API error:', error);
@@ -440,7 +576,9 @@ export const api = {
 
   translateLyrics: async (text: string, targetLang: string = 'HI') => {
     try {
-      const apiKey = 'cd1d2337-4561-4dd4-b102-fd4931c08d55:fx';
+      const apiKey = process.env.EXPO_PUBLIC_DEEPL_KEY;
+      if (!apiKey) return null;
+      
       const url = 'https://api-free.deepl.com/v2/translate';
       
       const { data } = await axios.post(url, {

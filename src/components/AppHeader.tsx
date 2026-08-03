@@ -63,15 +63,6 @@ export function AppHeader({ mode, title }: AppHeaderProps) {
           <TouchableOpacity 
             style={styles.iconButton} 
             activeOpacity={0.7}
-            onPress={() => router.push('/friends')}
-          >
-            <BlurView intensity={20} tint="dark" style={styles.iconBlur}>
-              <Ionicons name="people-outline" size={18} color={colors.label} />
-            </BlurView>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.iconButton} 
-            activeOpacity={0.7}
             onPress={() => router.push('/history')}
           >
             <BlurView intensity={20} tint="dark" style={styles.iconBlur}>
@@ -141,6 +132,16 @@ const styles = StyleSheet.create({
   iconButtons: {
     flexDirection: "row",
     gap: spacing.sm,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: colors.accentSolid,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    overflow: "hidden",
   },
   iconButton: {
     width: 36,

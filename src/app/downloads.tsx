@@ -17,7 +17,7 @@ export default function DownloadsScreen() {
     <View style={styles.container}>
       <LinearGradient
         colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
       />
       
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>

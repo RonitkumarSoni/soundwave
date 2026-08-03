@@ -11,7 +11,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { FilterChips } from "@/components/FilterChips";
 import { ForYouCarousel } from "@/components/ForYouCarousel";
 import { TrackRow } from "@/components/TrackRow";
-import { CardSkeleton } from "@/components/Skeletons";
+import { CardSkeleton, AppHeaderSkeleton, FilterChipsSkeleton, ForYouSkeleton } from "@/components/Skeletons";
 import { filterChips, dailyMixes, newReleases, allTracks, topPodcasts } from "@/data/mockData";
 import { api } from "@/lib/api";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -42,6 +42,7 @@ export default function HomeScreen() {
   const [listData, setListData] = useState<any[]>([]);
   const [previewTracks, setPreviewTracks] = useState<any[]>([]);
   const [youtubeTracks, setYoutubeTracks] = useState<any[]>([]);
+  const [recommendedTracks, setRecommendedTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
@@ -67,6 +68,16 @@ export default function HomeScreen() {
     }
   };
 
+  const deduplicateTracks = (tracks: any[]) => {
+    const seen = new Set<string>();
+    return tracks.filter((track) => {
+      const title = (track.name || track.title || '').toLowerCase().split('(')[0].split('-')[0].trim();
+      if (!title || seen.has(title)) return false;
+      seen.add(title);
+      return true;
+    });
+  };
+
   const loadInitialData = async (filter: string) => {
     setLoading(true);
     setOffset(0);
@@ -79,7 +90,7 @@ export default function HomeScreen() {
       } else {
         const order = getOrderParam(filter);
         const tracks = await api.getPopular(10, 0, order);
-        setListData(tracks);
+        setListData(deduplicateTracks(tracks));
       }
       
       // Load 30-sec previews
@@ -92,6 +103,22 @@ export default function HomeScreen() {
       if (youtubeTracks.length === 0) {
         const ytHits = await api.getYoutubeHits();
         setYoutubeTracks(ytHits);
+      }
+
+      // Load Recommended Tracks (real images)
+      if (recommendedTracks.length === 0) {
+        const queries = ["Blinding Lights The Weeknd", "Ocean Eyes Billie Eilish", "Circles Post Malone", "Levitating Dua Lipa", "Watermelon Sugar Harry Styles"];
+        const recTracks = await Promise.all(
+          queries.map(async (q) => {
+            try {
+              const res = await api.search(q);
+              return res.tracks && res.tracks.length > 0 ? res.tracks[0] : null;
+            } catch (e) {
+              return null;
+            }
+          })
+        );
+        setRecommendedTracks(recTracks.filter(Boolean));
       }
     } finally {
       setLoading(false);
@@ -115,7 +142,20 @@ export default function HomeScreen() {
       if (!items || items.length < 10) setHasMore(false);
       
       if (items && items.length > 0) {
-        setListData((prev) => [...prev, ...items]);
+        setListData((prev) => {
+          const existingTitles = new Set(
+            prev.map((p) => (p.name || p.title || '').toLowerCase().split('(')[0].split('-')[0].trim())
+          );
+          const newItems = items.filter((item) => {
+            const title = (item.name || item.title || '').toLowerCase().split('(')[0].split('-')[0].trim();
+            return title && !existingTitles.has(title);
+          });
+          if (newItems.length === 0) {
+            setHasMore(false);
+            return prev;
+          }
+          return [...prev, ...newItems];
+        });
         setOffset(nextOffset);
       }
     } catch (e) {
@@ -137,226 +177,236 @@ export default function HomeScreen() {
     </ScrollView>
   );
 
-  const renderHeader = () => (
+  const headerElement = React.useMemo(() => (
     <View>
-      <View style={{ paddingTop: insets.top }}>
-        <AppHeader mode="greeting" />
-      </View>
-
-      <FilterChips
-        chips={filterChips}
-        activeChip={activeFilter}
-        onSelect={setActiveFilter}
-      />
-
       {loading ? (
-        <View style={{ marginTop: spacing.xl, gap: spacing.xxl }}>
-          <View>
-            <Text style={[styles.sectionTitle, { marginLeft: spacing.lg, marginBottom: spacing.md }]}>For you</Text>
-            {renderSkeletons()}
+        <>
+          <View style={{ paddingTop: insets.top }}>
+            <AppHeaderSkeleton />
           </View>
-          <View>
-            <Text style={[styles.sectionTitle, { marginLeft: spacing.lg, marginBottom: spacing.md }]}>Daily Mixes</Text>
-            {renderSkeletons()}
+          <FilterChipsSkeleton />
+          <View style={{ marginTop: spacing.md, gap: spacing.xxl }}>
+            <View>
+              <Text style={[styles.sectionTitle, { marginLeft: spacing.lg, marginBottom: spacing.md }]}>For you</Text>
+              <ForYouSkeleton />
+            </View>
+            <View>
+              <Text style={[styles.sectionTitle, { marginLeft: spacing.lg, marginBottom: spacing.md }]}>Daily Mixes</Text>
+              {renderSkeletons()}
+            </View>
           </View>
-        </View>
+        </>
       ) : (
         <>
-          <View style={[styles.sectionHeader, { marginTop: spacing.sm }]}>
-            <Text style={styles.sectionTitle}>For you</Text>
-          </View>
-          <ForYouCarousel />
-
-          <View style={styles.timeContextContainer}>
-            {[
-              { id: 1, title: 'Morning Commute', image: 'https://images.unsplash.com/photo-1494548162494-384bba4ab999?w=300&q=80' },
-              { id: 2, title: 'Wake Up Pop', image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80' },
-              { id: 3, title: 'Coffee & Chill', image: 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=300&q=80' },
-              { id: 4, title: 'Focus Flow', image: 'https://images.unsplash.com/photo-1483058712412-4245e9b90334?w=300&q=80' },
-              { id: 5, title: 'Daily Lift', image: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=300&q=80' },
-              { id: 6, title: 'Discover Weekly', image: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300&q=80' },
-            ].map((item) => (
-              <TouchableOpacity key={item.id} style={styles.timeContextCard} activeOpacity={0.7}>
-                <Image source={{ uri: item.image }} style={styles.timeContextImage} />
-                <Text style={styles.timeContextTitle} numberOfLines={2}>{item.title}</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={{ paddingTop: insets.top }}>
+            <AppHeader mode="greeting" />
           </View>
 
-          <View style={{ marginBottom: spacing.md, marginTop: spacing.sm }}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Daily Mixes</Text>
-            </View>
-            <FlatList
-              data={dailyMixes}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
-              renderItem={({ item }) => (
-                <TouchableOpacity style={styles.recentCard} activeOpacity={0.7}>
-                  <Image source={{ uri: item.coverUrl }} style={styles.recentImage} />
-                  <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.artistSub} numberOfLines={1}>{item.description}</Text>
-                </TouchableOpacity>
-              )}
-              keyExtractor={item => item.id}
-            />
-          </View>
+          <FilterChips
+            chips={filterChips}
+            activeChip={activeFilter}
+            onSelect={setActiveFilter}
+          />
 
-          <View style={{ marginBottom: spacing.md }}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>New Releases</Text>
-            </View>
-            <FlatList
-              data={newReleases}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
-              renderItem={({ item }) => (
-                <TouchableOpacity style={styles.recentCard} activeOpacity={0.7}>
-                  <Image source={{ uri: item.coverUrl }} style={styles.recentImage} />
-                  <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.artistSub} numberOfLines={1}>{item.description}</Text>
-                </TouchableOpacity>
-              )}
-              keyExtractor={item => item.id}
-            />
-          </View>
-
-          <View style={{ marginBottom: spacing.md }}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Top Podcasts</Text>
-            </View>
-            <FlatList
-              data={topPodcasts}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
-              renderItem={({ item }) => (
-                <TouchableOpacity style={styles.recentCard} activeOpacity={0.7}>
-                  <Image source={{ uri: item.coverUrl }} style={[styles.recentImage, { borderRadius: 12 }]} />
-                  <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.artistSub} numberOfLines={1}>{item.host}</Text>
-                </TouchableOpacity>
-              )}
-              keyExtractor={item => item.id}
-            />
-          </View>
-
-          <View style={{ marginBottom: spacing.md }}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recommended for You</Text>
-            </View>
-            <FlatList
-              data={allTracks.slice(0, 6)}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={styles.recentCard} 
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    setTrack(item);
-                    setQueue(allTracks);
-                  }}
-                >
-                  <Image source={{ uri: item.coverUrl }} style={styles.recentImage} />
-                  <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.artistSub} numberOfLines={1}>{item.artist}</Text>
-                </TouchableOpacity>
-              )}
-              keyExtractor={item => 'rec_' + item.id}
-            />
-          </View>
-
-          {recentlyPlayed && recentlyPlayed.length > 0 && (
-            <View style={{ marginBottom: spacing.md }}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Recently Played</Text>
+          {activeFilter === "All" && (
+            <>
+              <View style={[styles.sectionHeader, { marginTop: spacing.sm }]}>
+                <Text style={styles.sectionTitle}>For you</Text>
               </View>
-              <FlatList
-                data={recentlyPlayed}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity 
-                    style={styles.recentCard} 
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      setTrack(item);
-                      setQueue(recentlyPlayed);
-                    }}
-                  >
-                    <Image source={{ uri: item.image }} style={styles.recentImage} />
-                    <Text style={styles.recentTitle} numberOfLines={1}>{item.name}</Text>
+              <ForYouCarousel />
+
+              <View style={styles.timeContextContainer}>
+                {[
+                  { id: 1, title: 'Morning Commute', image: 'https://images.unsplash.com/photo-1494548162494-384bba4ab999?w=300&q=80' },
+                  { id: 2, title: 'Wake Up Pop', image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80' },
+                  { id: 3, title: 'Coffee & Chill', image: 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=300&q=80' },
+                  { id: 4, title: 'Focus Flow', image: 'https://images.unsplash.com/photo-1483058712412-4245e9b90334?w=300&q=80' },
+                  { id: 5, title: 'Daily Lift', image: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=300&q=80' },
+                  { id: 6, title: 'Discover Weekly', image: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=300&q=80' },
+                ].map((item) => (
+                  <TouchableOpacity key={item.id} style={styles.timeContextCard} activeOpacity={0.7}>
+                    <Image source={{ uri: item.image }} style={styles.timeContextImage} />
+                    <Text style={styles.timeContextTitle} numberOfLines={2}>{item.title}</Text>
                   </TouchableOpacity>
-                )}
-                keyExtractor={item => 'recent_' + item.id}
-              />
-            </View>
+                ))}
+              </View>
+
+              <View style={{ marginBottom: spacing.md, marginTop: spacing.sm }}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Daily Mixes</Text>
+                </View>
+                <FlatList
+                  data={dailyMixes}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity style={styles.recentCard} activeOpacity={0.7}>
+                      <Image source={{ uri: item.coverUrl }} style={styles.recentImage} />
+                      <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.artistSub} numberOfLines={1}>{item.description}</Text>
+                    </TouchableOpacity>
+                  )}
+                  keyExtractor={item => item.id}
+                />
+              </View>
+
+              <View style={{ marginBottom: spacing.md }}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>New Releases</Text>
+                </View>
+                <FlatList
+                  data={newReleases}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity style={styles.recentCard} activeOpacity={0.7}>
+                      <Image source={{ uri: item.coverUrl }} style={styles.recentImage} />
+                      <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.artistSub} numberOfLines={1}>{item.description}</Text>
+                    </TouchableOpacity>
+                  )}
+                  keyExtractor={item => item.id}
+                />
+              </View>
+
+              <View style={{ marginBottom: spacing.md }}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Top Podcasts</Text>
+                </View>
+                <FlatList
+                  data={topPodcasts}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity style={styles.recentCard} activeOpacity={0.7}>
+                      <Image source={{ uri: item.coverUrl }} style={[styles.recentImage, { borderRadius: 12 }]} />
+                      <Text style={styles.recentTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.artistSub} numberOfLines={1}>{item.host}</Text>
+                    </TouchableOpacity>
+                  )}
+                  keyExtractor={item => item.id}
+                />
+              </View>
+
+              <View style={{ marginBottom: spacing.md }}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Recommended for You</Text>
+                </View>
+                <FlatList
+                  data={recommendedTracks.length > 0 ? recommendedTracks : allTracks.slice(0, 6)}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity 
+                      style={styles.recentCard} 
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setTrack(item);
+                        setQueue(recommendedTracks.length > 0 ? recommendedTracks : allTracks);
+                      }}
+                    >
+                      <Image source={{ uri: item.coverUrl || item.image }} style={styles.recentImage} />
+                      <Text style={styles.recentTitle} numberOfLines={1}>{item.title || item.name}</Text>
+                      <Text style={styles.artistSub} numberOfLines={1}>{item.artist || item.artist_name}</Text>
+                    </TouchableOpacity>
+                  )}
+                  keyExtractor={(item, idx) => 'rec_' + (item.id || idx)}
+                />
+              </View>
+
+              {recentlyPlayed && recentlyPlayed.length > 0 && (
+                <View style={{ marginBottom: spacing.md }}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Recently Played</Text>
+                  </View>
+                  <FlatList
+                    data={recentlyPlayed}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity 
+                        style={styles.recentCard} 
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setTrack(item);
+                          setQueue(recentlyPlayed);
+                        }}
+                      >
+                        <Image source={{ uri: item.image }} style={styles.recentImage} />
+                        <Text style={styles.recentTitle} numberOfLines={1}>{item.name}</Text>
+                      </TouchableOpacity>
+                    )}
+                    keyExtractor={item => 'recent_' + item.id}
+                  />
+                </View>
+              )}
+
+              {previewTracks.length > 0 && (
+                <View style={{ marginBottom: spacing.md }}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>30-Sec Previews (via iTunes)</Text>
+                  </View>
+                  <FlatList
+                    data={previewTracks}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity 
+                        style={styles.recentCard} 
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setTrack(item);
+                          setQueue(previewTracks);
+                        }}
+                      >
+                        <Image source={{ uri: item.image }} style={[styles.recentImage, { borderRadius: 100 }]} />
+                        <Text style={styles.recentTitle} numberOfLines={1}>{item.name}</Text>
+                        <Text style={styles.artistSub} numberOfLines={1}>{item.artist_name}</Text>
+                      </TouchableOpacity>
+                    )}
+                    keyExtractor={item => 'preview_' + item.id}
+                  />
+                </View>
+              )}
+
+              {youtubeTracks.length > 0 && (
+                <View style={{ marginBottom: spacing.md }}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Trending on YouTube Music</Text>
+                  </View>
+                  <FlatList
+                    data={youtubeTracks}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity 
+                        style={styles.recentCard} 
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setTrack(item);
+                          setQueue(youtubeTracks);
+                        }}
+                      >
+                        <Image source={{ uri: item.image }} style={styles.recentImage} />
+                        <Text style={styles.recentTitle} numberOfLines={1}>{item.name}</Text>
+                        <Text style={styles.artistSub} numberOfLines={1}>{item.artist_name}</Text>
+                      </TouchableOpacity>
+                    )}
+                    keyExtractor={item => 'yt_' + item.id}
+                  />
+                </View>
+              )}
+            </>
           )}
 
-          {previewTracks.length > 0 && (
-            <View style={{ marginBottom: spacing.md }}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>30-Sec Previews (via iTunes)</Text>
-              </View>
-              <FlatList
-                data={previewTracks}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity 
-                    style={styles.recentCard} 
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      setTrack(item);
-                      setQueue(previewTracks);
-                    }}
-                  >
-                    <Image source={{ uri: item.image }} style={[styles.recentImage, { borderRadius: 100 }]} />
-                    <Text style={styles.recentTitle} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.artistSub} numberOfLines={1}>{item.artist_name}</Text>
-                  </TouchableOpacity>
-                )}
-                keyExtractor={item => 'preview_' + item.id}
-              />
-            </View>
-          )}
-
-          {youtubeTracks.length > 0 && (
-            <View style={{ marginBottom: spacing.md }}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Trending on YouTube Music</Text>
-              </View>
-              <FlatList
-                data={youtubeTracks}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity 
-                    style={styles.recentCard} 
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      setTrack(item);
-                      setQueue(youtubeTracks);
-                    }}
-                  >
-                    <Image source={{ uri: item.image }} style={styles.recentImage} />
-                    <Text style={styles.recentTitle} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.artistSub} numberOfLines={1}>{item.artist_name}</Text>
-                  </TouchableOpacity>
-                )}
-                keyExtractor={item => 'yt_' + item.id}
-              />
-            </View>
-          )}
-
-          <View style={styles.sectionHeader}>
+          <View style={[styles.sectionHeader, activeFilter !== "All" && { marginTop: spacing.md }]}>
             <Text style={styles.sectionTitle}>
               {activeFilter === "New Artists" ? "Popular Artists" : "Popular Tracks"}
             </Text>
@@ -367,29 +417,39 @@ export default function HomeScreen() {
         </>
       )}
     </View>
-  );
+  ), [activeFilter, previewTracks, youtubeTracks, loading, insets.top, recentlyPlayed]);
+
+  const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }: any) => {
+    const paddingToBottom = 300;
+    return layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+  };
 
   return (
     <LinearGradient
       colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
       style={styles.container}
     >
-      <FlatList
-        data={listData}
-        renderItem={({ item, index }) => (
-          activeFilter === "New Artists" ? (
-            <ArtistRow artist={item} />
-          ) : (
-            <TrackRow track={item} index={index} contextQueue={listData as any} />
-          )
-        )}
-        keyExtractor={(item, index) => (item.id ? item.id.toString() : index.toString()) + '_' + index}
-        ListHeaderComponent={renderHeader}
-        contentContainerStyle={{ paddingBottom: bottomPadding }}
+      <ScrollView
         showsVerticalScrollIndicator={false}
-        onEndReached={loadMoreData}
-        onEndReachedThreshold={0.4}
-      />
+        contentContainerStyle={{ paddingBottom: bottomPadding }}
+        onScroll={({ nativeEvent }) => {
+          if (isCloseToBottom(nativeEvent)) {
+            loadMoreData();
+          }
+        }}
+        scrollEventThrottle={400}
+      >
+        {headerElement}
+        <View>
+          {listData.map((item, index) => (
+            activeFilter === "New Artists" ? (
+              <ArtistRow key={`artist_${item.id || index}_${index}`} artist={item} />
+            ) : (
+              <TrackRow key={`track_${item.id || index}_${index}`} track={item} index={index} contextQueue={listData as any} />
+            )
+          ))}
+        </View>
+      </ScrollView>
     </LinearGradient>
   );
 }

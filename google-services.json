@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "514260576219",
+    "firebase_url": "https://music-app-92cbb-default-rtdb.firebaseio.com",
+    "project_id": "music-app-92cbb",
+    "storage_bucket": "music-app-92cbb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:514260576219:android:ecbc4c367343823373e9fe",
+        "android_client_info": {
+          "package_name": "com.ronit55.soundwave"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "514260576219-em1tjqq13ci3coffqqgkrrcrqie9noor.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbbYLvEOLNa7vdkhzQFADuIdDbIM85-ms"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "514260576219-em1tjqq13ci3coffqqgkrrcrqie9noor.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

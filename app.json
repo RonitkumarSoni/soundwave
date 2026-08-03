@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "soundwave",
-    "jsEngine": "hermes",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
@@ -23,7 +22,15 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.ronit55.soundwave",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "WAKE_LOCK",
+        "FOREGROUND_SERVICE"
+      ]
     },
     "web": {
       "output": "static",
@@ -39,11 +46,20 @@
           "imageWidth": 76
         }
       ],
-      "expo-web-browser"
+      "expo-av",
+      "expo-web-browser",
+      "expo-image",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e4de77f1-168f-487b-8206-0471b5f1c0c4"
+      }
     }
   }
 }
