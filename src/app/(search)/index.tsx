@@ -1,13 +1,13 @@
 import { Image } from 'expo-image';
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Pressable, Modal } from 'react-native';
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { BlurView } from "expo-blur";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, gradients, spacing, borderRadius } from "@/theme/colors";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { TrackRow } from "@/components/TrackRow";
 import { TrackRowSkeleton, CardSkeleton } from "@/components/Skeletons";
 import { FilterChips } from "@/components/FilterChips";
@@ -88,13 +88,17 @@ function AnimatedGenreCard({ genre, onPress }: { genre: any; onPress: (name: str
 
 export default function SearchScreen() {
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const params = useLocalSearchParams<{ q?: string }>();
+  const [query, setQuery] = useState(params.q || "");
   const [results, setResults] = useState<{ tracks: Track[], artists: any[], albums: any[] }>({ tracks: [], artists: [], albums: [] });
   const [activeTab, setActiveTab] = useState("Top");
   const [loading, setLoading] = useState(false);
   const [genreLoading, setGenreLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [showSpotifyImport, setShowSpotifyImport] = useState(false);
+  const [spotifyUrl, setSpotifyUrl] = useState("");
+  const [spotifyLoading, setSpotifyLoading] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const insets = useSafeAreaInsets();
   const setTrack = usePlayerStore((s) => s.setTrack);
@@ -122,6 +126,12 @@ export default function SearchScreen() {
       scanAnim.setValue(0);
     }
   }, [showScanner]);
+
+  useEffect(() => {
+    if (params.q && params.q !== query) {
+      setQuery(params.q as string);
+    }
+  }, [params.q]);
 
   useEffect(() => {
     loadRecentSearches();
@@ -250,6 +260,28 @@ export default function SearchScreen() {
     }, 2500);
   };
 
+  const handleSpotifyImport = async () => {
+    if (!spotifyUrl.trim()) return;
+    setSpotifyLoading(true);
+    try {
+      // 1. Fetch playlist from our backend
+      const playlist = await api.importSpotify(spotifyUrl);
+      
+      if (playlist && playlist.tracks) {
+        // 2. We could play them or load them. For now just search the first track to prove it works
+        if (playlist.tracks.length > 0) {
+          setQuery(`${playlist.tracks[0].title} ${playlist.tracks[0].subtitle}`);
+          setShowSpotifyImport(false);
+          setSpotifyUrl("");
+        }
+      }
+    } catch (e) {
+      console.error("Spotify import failed", e);
+    } finally {
+      setSpotifyLoading(false);
+    }
+  };
+
   return (
     <LinearGradient
       colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
@@ -291,7 +323,14 @@ export default function SearchScreen() {
               />
             </TouchableOpacity>
           ) : (
-            <View style={{ flexDirection: 'row', gap: spacing.md }}>
+            <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => setShowSpotifyImport(true)}>
+                <FontAwesome5
+                  name="spotify"
+                  size={18}
+                  color="#1DB954"
+                />
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => setShowScanner(true)}>
                 <Ionicons
                   name="camera-outline"
@@ -477,6 +516,41 @@ export default function SearchScreen() {
         )}
       </ScrollView>
 
+      {/* Spotify Import Modal */}
+      <Modal visible={showSpotifyImport} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={100} tint="dark" style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Import from Spotify</Text>
+              <TouchableOpacity onPress={() => setShowSpotifyImport(false)}>
+                <Ionicons name="close" size={24} color={colors.label} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>Paste a public Spotify playlist or album URL below.</Text>
+            <TextInput
+              style={styles.spotifyInput}
+              placeholder="https://open.spotify.com/playlist/..."
+              placeholderTextColor={colors.tertiaryLabel}
+              value={spotifyUrl}
+              onChangeText={setSpotifyUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity 
+              style={[styles.importButton, (!spotifyUrl.trim() || spotifyLoading) && { opacity: 0.5 }]} 
+              onPress={handleSpotifyImport}
+              disabled={!spotifyUrl.trim() || spotifyLoading}
+            >
+              {spotifyLoading ? (
+                <ActivityIndicator color={colors.background} size="small" />
+              ) : (
+                <Text style={styles.importButtonText}>Import Playlist</Text>
+              )}
+            </TouchableOpacity>
+          </BlurView>
+        </View>
+      </Modal>
+
       {/* Listening Modal */}
       <Modal visible={isListening} transparent animationType="fade">
         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
@@ -589,6 +663,8 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: 15,
     color: colors.label,
     height: "100%",
@@ -730,7 +806,58 @@ const styles = StyleSheet.create({
   artistImage: {
     width: 50,
     height: 50,
-    borderRadius: 25,
+    borderRadius: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  modalContent: {
+    backgroundColor: 'rgba(20, 20, 25, 0.4)',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.label,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: colors.secondaryLabel,
+    marginBottom: spacing.lg,
+  },
+  spotifyInput: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    color: colors.label,
+    fontSize: 14,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  importButton: {
+    backgroundColor: '#1DB954',
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  importButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   albumImage: {
     width: 50,

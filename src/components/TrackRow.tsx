@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Share, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Share, Alert, ActivityIndicator, Platform } from 'react-native';
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -65,22 +65,37 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
   const handleShare = async () => {
     setMenuVisible(false);
     try {
+      const shareUrl = Platform.OS === 'web' 
+        ? `https://soundwave.app/track/${track.id}` 
+        : `soundwave://track/${track.id}`;
+        
       await Share.share({
-        message: `Listen to ${track.name} by ${track.artist_name} on Soundwave!`,
-        url: `soundwave://track/${track.id}`,
+        message: `Listen to ${track.name} by ${track.artist_name} on Soundwave! ${Platform.OS === 'web' ? shareUrl : ''}`,
+        url: Platform.OS === 'web' ? undefined : shareUrl,
       });
     } catch (error) {
       console.error(error);
     }
   };
 
-  const handlePlay = async () => {
+  const handleRowPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (isCurrentTrack) {
+      return;
+    }
+    playTrack();
+  };
+
+  const handlePlayButtonPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isCurrentTrack) {
       togglePlay();
       return;
     }
-    
+    playTrack();
+  };
+
+  const playTrack = async () => {
     setTrack(track);
     if (contextQueue && contextQueue.length > 1) {
       setQueue(contextQueue);
@@ -106,7 +121,7 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
     <Animated.View entering={FadeInDown.delay((index % 12) * 50).duration(300)}>
       <TouchableOpacity
         style={styles.container}
-        onPress={handlePlay}
+        onPress={handleRowPress}
         activeOpacity={0.7}
       >
         {/* Cover Art */}
@@ -154,7 +169,7 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
         </TouchableOpacity>
 
         {/* Play Button */}
-        <TouchableOpacity onPress={handlePlay} activeOpacity={0.7}>
+        <TouchableOpacity onPress={handlePlayButtonPress} activeOpacity={0.7}>
           <LinearGradient
             colors={[gradients.primary[0], gradients.primary[1]]}
             start={{ x: 0, y: 0 }}
@@ -203,7 +218,14 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
               <Text style={styles.menuItemText}>Start Radio</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); router.push(`/artist/${track.artist_id}`); }}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { 
+              setMenuVisible(false); 
+              if (track.artist_id) {
+                router.push(`/artist/${track.artist_id}`); 
+              } else {
+                Alert.alert("Artist Not Found", "Detailed artist information is not available for this track.");
+              }
+            }}>
               <Ionicons name="person-outline" size={24} color="#FFF" />
               <Text style={styles.menuItemText}>View Artist</Text>
             </TouchableOpacity>

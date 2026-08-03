@@ -2,6 +2,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CryptoJS from 'crypto-js';
 import { Platform } from 'react-native';
+import { useSettingsStore } from '@/stores/useSettingsStore';
 
 // Use environment variable for API URL in production, fallback to Render backend
 const API_BASE = process.env.EXPO_PUBLIC_API_URL || "https://soundwave-backend-p4y0.onrender.com/api";
@@ -20,6 +21,14 @@ const formatImageUrl = (url?: string) => {
   }
   let clean = url.replace('http:', 'https:');
   return clean.replace('150x150', '500x500').replace('50x50', '500x500').replace('80x80', '500x500');
+};
+
+const applyQuality = (url: string) => {
+  const quality = useSettingsStore.getState().audioQuality; // 'low', 'medium', 'high'
+  let target = '_320.mp4';
+  if (quality === 'low') target = '_96.mp4';
+  else if (quality === 'medium') target = '_160.mp4';
+  return url.replace('_96.mp4', target).replace('_160.mp4', target).replace('_320.mp4', target);
 };
 
 // Retry helper for Render cold start
@@ -128,42 +137,70 @@ export const api = {
   },
   search: async (query: string) => {
     try {
-      // Use official JioSaavn API for Search
-      const url = `https://www.jiosaavn.com/api.php?__call=search.getResults&q=${encodeURIComponent(query)}&n=20&p=1&_format=json&_marker=0&ctx=android`;
-      const { data } = await axios.get(getProxiedUrl(url));
-      
-      const tracks = (data.results || []).map((song: any) => {
-        // Decrypt the media url using JioSaavn's DES-ECB cipher
-        let mediaUrl = "";
+      // 1. Fetch from YouTube Music (for original global songs, like Spotify but with audio)
+      const ytPromise = apiClient.get(`/youtube/tracks?q=${encodeURIComponent(query)}&limit=15`)
+        .then(res => res.data.results || [])
+        .catch(() => []);
+
+      // 2. Fetch from JioSaavn (for Indian content / Bollywood)
+      const jioPromise = (async () => {
         try {
-          if (song.encrypted_media_url) {
-            const key = CryptoJS.enc.Utf8.parse("38346591");
-            const decrypted = CryptoJS.DES.decrypt(
-                { ciphertext: CryptoJS.enc.Base64.parse(song.encrypted_media_url) } as any,
-                key,
-                { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }
-            );
-            mediaUrl = decrypted.toString(CryptoJS.enc.Utf8);
-            // Saavn provides mp4, convert to mp3 if needed or keep mp4 (expo-av supports mp4)
-            mediaUrl = mediaUrl.replace('_96.mp4', '_320.mp4');
-          }
+          const url = `https://www.jiosaavn.com/api.php?__call=search.getResults&q=${encodeURIComponent(query)}&n=15&p=1&_format=json&_marker=0&ctx=android`;
+          const { data } = await axios.get(getProxiedUrl(url));
+          return (data.results || []).map((song: any) => {
+            let mediaUrl = "";
+            try {
+              if (song.encrypted_media_url) {
+                const key = CryptoJS.enc.Utf8.parse("38346591");
+                const decrypted = CryptoJS.DES.decrypt(
+                    { ciphertext: CryptoJS.enc.Base64.parse(song.encrypted_media_url) } as any,
+                    key,
+                    { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }
+                );
+                mediaUrl = decrypted.toString(CryptoJS.enc.Utf8).replace('_96.mp4', '_320.mp4');
+              }
+            } catch (e) {}
+            return {
+              id: song.id,
+              name: song.song || song.title,
+              artist_name: song.primary_artists || song.singers || 'Unknown Artist',
+              album_name: song.album || '',
+              image: formatImageUrl(song.image),
+              audio: mediaUrl,
+              duration: song.duration ? parseInt(song.duration, 10) : 0,
+              source: 'jiosaavn'
+            };
+          });
         } catch (e) {
-          console.error("Failed to decrypt media url", e);
+          return [];
         }
+      })();
 
-        return {
-          id: song.id,
-          name: song.song || song.title,
-          artist_name: song.primary_artists || song.singers || 'Unknown Artist',
-          album_name: song.album || '',
-          image: formatImageUrl(song.image),
-          audio: mediaUrl,
-          duration: song.duration ? parseInt(song.duration, 10) : 0,
-          source: 'jiosaavn'
-        };
-      });
+      // 3. Fetch from Spotify API via backend
+      const spPromise = apiClient.get(`/catalog/tracks?q=${encodeURIComponent(query)}&limit=10`)
+        .then(res => res.data.results || [])
+        .catch(() => []);
 
-      return { tracks, artists: [], albums: [] };
+      const [ytTracks, jioTracks, spTracks] = await Promise.all([ytPromise, jioPromise, spPromise]);
+
+      // Interleave results: YT (Originals), Spotify, JioSaavn (Bollywood)
+      const combined = [];
+      const maxLength = Math.max(ytTracks.length, jioTracks.length, spTracks.length);
+      for (let i = 0; i < maxLength; i++) {
+        if (ytTracks[i]) combined.push(ytTracks[i]);
+        if (spTracks[i]) combined.push(spTracks[i]);
+        if (jioTracks[i]) combined.push(jioTracks[i]);
+      }
+
+      // Remove duplicates by name and artist to keep it clean
+      const uniqueTracks = combined.filter((track, index, self) =>
+        index === self.findIndex((t) => (
+          t.name.toLowerCase() === track.name.toLowerCase() &&
+          t.artist_name.toLowerCase() === track.artist_name.toLowerCase()
+        ))
+      );
+
+      return { tracks: uniqueTracks, artists: [], albums: [] };
     } catch (error) {
       console.error('Search API error:', error);
       return { tracks: [], artists: [], albums: [] };
@@ -224,7 +261,7 @@ export const api = {
     }
   },
 
-  getPopular: async (limit = 10, offset = 0, order = 'popularity_week') => {
+  getPopular: async (limit = 10, offset = 0, order = 'popularity_week', country = 'India') => {
     try {
       const diverseTracks: any[] = [];
       const usedImages = new Set<string>();
@@ -232,7 +269,7 @@ export const api = {
       const page = Math.floor(offset / limit) + 1;
       let query = "Top Hits";
       if (order === "releasedate") query = "New Releases";
-      if (order === "popularity_total") query = "Trending";
+      if (order === "popularity_total") query = `Trending in ${country}`;
 
       const url = `https://www.jiosaavn.com/api.php?__call=search.getResults&q=${encodeURIComponent(query)}&n=30&p=${page}&_format=json&_marker=0&ctx=android`;
       
@@ -253,7 +290,7 @@ export const api = {
                     key,
                     { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }
                 );
-                mediaUrl = decrypted.toString(CryptoJS.enc.Utf8).replace('_96.mp4', '_320.mp4');
+                mediaUrl = applyQuality(decrypted.toString(CryptoJS.enc.Utf8));
               } else if (song.media_preview_url) {
                 mediaUrl = song.media_preview_url.replace('preview.saavncdn.com', 'aac.saavncdn.com').replace('_96_p', '_320');
               }
@@ -358,7 +395,7 @@ export const api = {
                 key,
                 { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }
             );
-            mediaUrl = decrypted.toString(CryptoJS.enc.Utf8).replace('_96.mp4', '_320.mp4');
+            mediaUrl = applyQuality(decrypted.toString(CryptoJS.enc.Utf8));
           }
         } catch (e) {
           console.error("Failed to decrypt media url", e);
@@ -574,26 +611,15 @@ export const api = {
     }
   },
 
-  translateLyrics: async (text: string, targetLang: string = 'HI') => {
+  translateLyrics: async (text: string, targetLang: string = 'hi') => {
     try {
-      const apiKey = process.env.EXPO_PUBLIC_DEEPL_KEY;
-      if (!apiKey) return null;
-      
-      const url = 'https://api-free.deepl.com/v2/translate';
-      
-      const { data } = await axios.post(url, {
-        text: [text],
-        target_lang: targetLang
-      }, {
-        headers: {
-          'Authorization': `DeepL-Auth-Key ${apiKey}`,
-          'Content-Type': 'application/json'
-        }
+      const { data } = await apiClient.post('/catalog/translate-lyrics', {
+        text,
+        lang: targetLang
       });
-      
-      return data.translations?.[0]?.text || null;
+      return data.translatedText || null;
     } catch (error) {
-      console.log('translateLyrics API error:', error);
+      console.error('Translation failed', error);
       return null;
     }
   },
@@ -630,6 +656,15 @@ export const api = {
     } catch (error) {
       console.log('getYoutubeHits API error:', error);
       return [];
+    }
+  },
+  importSpotify: async (url: string) => {
+    try {
+      const { data } = await apiClient.get(`/catalog/import-spotify?url=${encodeURIComponent(url)}`);
+      return data;
+    } catch (error) {
+      console.error('importSpotify API error:', error);
+      return null;
     }
   }
 };

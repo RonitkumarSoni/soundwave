@@ -16,6 +16,7 @@ import { filterChips, dailyMixes, newReleases, allTracks, topPodcasts } from "@/
 import { api } from "@/lib/api";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { usePlayerStore } from "@/stores/usePlayerStore";
+import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useBottomPadding } from "@/hooks/useBottomPadding";
 
 function ArtistRow({ artist }: { artist: any }) {
@@ -47,16 +48,28 @@ export default function HomeScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [country, setCountry] = useState<string>('India');
   const insets = useSafeAreaInsets();
   const bottomPadding = useBottomPadding();
   
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
   const recentlyPlayed = usePlayerStore((s) => s.recentlyPlayed);
+  const downloadedTracks = usePlayerStore((s) => s.downloadedTracks);
   const initRecentlyPlayed = usePlayerStore((s) => s.initRecentlyPlayed);
+  const offlineMode = useSettingsStore((s) => s.offlineMode);
 
   useEffect(() => {
     initRecentlyPlayed();
+    // Fetch region (using a CORS-friendly API for Web)
+    fetch('https://ipwho.is/')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.country) {
+          setCountry(data.country);
+        }
+      })
+      .catch(e => console.log('Region fetch error', e));
   }, []);
 
   const getOrderParam = (filter: string) => {
@@ -79,6 +92,11 @@ export default function HomeScreen() {
   };
 
   const loadInitialData = async (filter: string) => {
+    if (offlineMode) {
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     setOffset(0);
     setHasMore(true);
@@ -89,7 +107,7 @@ export default function HomeScreen() {
         setListData(artists);
       } else {
         const order = getOrderParam(filter);
-        const tracks = await api.getPopular(10, 0, order);
+        const tracks = await api.getPopular(10, 0, order, country);
         setListData(deduplicateTracks(tracks));
       }
       
@@ -128,36 +146,20 @@ export default function HomeScreen() {
   const loadMoreData = async () => {
     if (loadingMore || !hasMore || loading) return;
     setLoadingMore(true);
-    const nextOffset = offset + 10;
+    const newOffset = offset + 10;
 
     try {
-      let items: any[] = [];
       if (activeFilter === "New Artists") {
-        items = await api.getArtists(10, nextOffset);
+        const artists = await api.getArtists(10, newOffset);
+        if (artists.length === 0) setHasMore(false);
+        else setListData(prev => [...prev, ...artists]);
       } else {
         const order = getOrderParam(activeFilter);
-        items = await api.getPopular(10, nextOffset, order);
+        const newTracks = await api.getPopular(10, newOffset, order, country);
+        if (newTracks.length === 0) setHasMore(false);
+        else setListData(prev => [...prev, ...deduplicateTracks(newTracks)]);
       }
-      
-      if (!items || items.length < 10) setHasMore(false);
-      
-      if (items && items.length > 0) {
-        setListData((prev) => {
-          const existingTitles = new Set(
-            prev.map((p) => (p.name || p.title || '').toLowerCase().split('(')[0].split('-')[0].trim())
-          );
-          const newItems = items.filter((item) => {
-            const title = (item.name || item.title || '').toLowerCase().split('(')[0].split('-')[0].trim();
-            return title && !existingTitles.has(title);
-          });
-          if (newItems.length === 0) {
-            setHasMore(false);
-            return prev;
-          }
-          return [...prev, ...newItems];
-        });
-        setOffset(nextOffset);
-      }
+      setOffset(newOffset);
     } catch (e) {
       console.error('Failed to load more data', e);
     } finally {
@@ -167,7 +169,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     loadInitialData(activeFilter);
-  }, [activeFilter]);
+  }, [activeFilter, offlineMode]);
 
   const renderSkeletons = () => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
@@ -195,6 +197,41 @@ export default function HomeScreen() {
               {renderSkeletons()}
             </View>
           </View>
+        </>
+      ) : offlineMode ? (
+        <>
+          <View style={{ paddingTop: insets.top }}>
+            <AppHeader mode="greeting" />
+          </View>
+          <View style={[styles.sectionHeader, { marginTop: spacing.xl, marginBottom: spacing.md }]}>
+            <Ionicons name="cloud-offline" size={24} color={colors.accentSolid} />
+            <Text style={[styles.sectionTitle, { marginLeft: spacing.sm }]}>Offline Mode</Text>
+          </View>
+          {downloadedTracks.length > 0 ? (
+            <View style={{ paddingHorizontal: spacing.lg }}>
+              <Text style={{ color: 'rgba(255,255,255,0.7)', marginBottom: spacing.lg }}>
+                Showing your downloaded tracks. Network access is disabled.
+              </Text>
+              {downloadedTracks.map((track, idx) => (
+                <TrackRow 
+                  key={track.id} 
+                  track={track} 
+                  onPress={() => {
+                    setQueue(downloadedTracks);
+                    setTrack(track);
+                  }}
+                  isLast={idx === downloadedTracks.length - 1}
+                />
+              ))}
+            </View>
+          ) : (
+            <View style={{ alignItems: 'center', marginTop: 100 }}>
+              <Ionicons name="musical-notes-outline" size={64} color="rgba(255,255,255,0.2)" />
+              <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 16, marginTop: spacing.md }}>
+                No downloaded tracks available.
+              </Text>
+            </View>
+          )}
         </>
       ) : (
         <>
@@ -233,7 +270,9 @@ export default function HomeScreen() {
 
               <View style={{ marginBottom: spacing.md, marginTop: spacing.sm }}>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Daily Mixes</Text>
+                  <Text style={styles.sectionTitle}>
+                    {activeFilter === "Hot Tracks" ? `Trending in ${country}` : "Daily Mixes"}
+                  </Text>
                 </View>
                 <FlatList
                   data={dailyMixes}

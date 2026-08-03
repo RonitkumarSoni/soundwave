@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import React, { useRef, useState, useEffect } from "react";
 import { FlatList, View, Text, TouchableOpacity, StyleSheet, Dimensions, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 
 import { colors, gradients, spacing, borderRadius } from "@/theme/colors";
 import { promoCards, PromoCard } from "@/data/mockData";
@@ -20,17 +21,10 @@ export function ForYouCarousel() {
   const isDragging = useRef(false);
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
+  const router = useRouter();
 
-  const handleCtaPress = async (searchQuery: string) => {
-    try {
-      const tracks = await api.search(searchQuery);
-      if (tracks.length > 0) {
-        setTrack(tracks[0]);
-        setQueue(tracks);
-      }
-    } catch (e) {
-      console.error('Carousel CTA error:', e);
-    }
+  const handleCtaPress = (searchQuery: string) => {
+    router.push(`/(search)?q=${encodeURIComponent(searchQuery)}`);
   };
 
   // Autoplay effect

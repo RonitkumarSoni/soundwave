@@ -82,13 +82,35 @@ export function useAudioPlayer() {
           return;
         }
       } else {
-        // Fallback for Jamendo (sometimes audio stream is 404, audiodownload works better)
+        // Fallback for Jamendo and others
         audioUri = currentTrack.audiodownload || currentTrack.audio;
       }
 
       if (!audioUri) {
         console.error("Error loading audio: track has no audio URL", currentTrack);
         return;
+      }
+      
+      // Automatic Song Caching Logic
+      if (!isWeb) {
+        try {
+          const FileSystem = require('expo-file-system');
+          const CACHE_DIR = `${FileSystem.documentDirectory}audio_cache/`;
+          await FileSystem.makeDirectoryAsync(CACHE_DIR, { intermediates: true }).catch(() => {});
+          
+          const filename = `${currentTrack.id}_${currentTrack.source || 'default'}.m4a`;
+          const fileUri = `${CACHE_DIR}${filename}`;
+          
+          const fileInfo = await FileSystem.getInfoAsync(fileUri);
+          if (fileInfo.exists) {
+            audioUri = fileUri; // Play from local cache
+          } else {
+            // Start background download for future plays
+            FileSystem.downloadAsync(audioUri, fileUri).catch((e: any) => console.log('Cache download failed', e));
+          }
+        } catch (e) {
+          console.log('Caching setup failed:', e);
+        }
       }
 
       try {

@@ -228,10 +228,47 @@ export class SpotifyService {
 
   async getAlbumTracks(albumId: string): Promise<JamendoResponse<JamendoTrack>> {
     const data = await this.request<any>(`/albums/${albumId}/tracks`);
-    // Note: The /albums/{id}/tracks endpoint does not return full album info in the track object.
-    // But since it's just tracks, it's mostly fine. For a perfect map, we might need to get the album first.
-    // For now, let's just map what we have.
     const formatted = (data.items || []).map((t: any) => this.formatTrack(t));
     return this.wrapResponse(formatted, data.total || 0);
+  }
+
+  async importPlaylist(url: string) {
+    try {
+      const fetch = require('isomorphic-unfetch');
+      const spotifyUrlInfo = require('spotify-url-info')(fetch);
+      
+      const data = await spotifyUrlInfo.getData(url);
+      
+      if (data?.type === 'playlist') {
+        const tracks = data.trackList.map((track: any) => ({
+          title: track.title,
+          subtitle: track.subtitle,
+        }));
+        
+        return {
+          id: data.id,
+          name: data.name,
+          cover: data.coverArt?.sources?.[0]?.url || data.coverArt?.sources?.[2]?.url,
+          tracks: tracks
+        };
+      } else if (data?.type === 'album') {
+        const tracks = data.trackList.map((track: any) => ({
+          title: track.title,
+          subtitle: track.subtitle,
+        }));
+        
+        return {
+          id: data.id,
+          name: data.name,
+          cover: data.coverArt?.sources?.[0]?.url,
+          tracks: tracks
+        };
+      }
+      
+      throw new Error('Unsupported Spotify URL type');
+    } catch (error) {
+      this.logger.error('Spotify import error:', error);
+      throw new HttpException('Failed to parse Spotify URL', HttpStatus.BAD_REQUEST);
+    }
   }
 }

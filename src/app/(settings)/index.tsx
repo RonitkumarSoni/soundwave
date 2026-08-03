@@ -318,6 +318,17 @@ export default function SettingsScreen() {
           )}
           <View style={styles.divider} />
           {renderRow(
+            'cloud-offline-outline', 
+            'Offline Mode', 
+            'Only show downloaded tracks, block network access',
+            <Switch 
+              value={settings.offlineMode} 
+              onValueChange={(v) => settings.updateSetting('offlineMode', v)}
+              trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
+            />
+          )}
+          <View style={styles.divider} />
+          {renderRow(
             'server-outline', 
             'Clear Downloads', 
             `${usePlayerStore(s => s.downloadedTracks).length * 5} MB used by downloaded tracks`,

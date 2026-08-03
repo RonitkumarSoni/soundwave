@@ -78,6 +78,33 @@ export default function RootLayout() {
     loadAuthFromStorage();
   }, [loadAuthFromStorage]);
 
+  // Deep Linking Handler
+  React.useEffect(() => {
+    const Linking = require('expo-linking');
+    const handleDeepLink = async (url: string | null) => {
+      if (!url) return;
+      try {
+        const parsedUrl = Linking.parse(url);
+        // Example: soundwave://play?id=123&type=track
+        if (parsedUrl.queryParams?.id) {
+          const id = parsedUrl.queryParams.id as string;
+          // Here we would fetch track details from API and play it
+          // For now we log it since we need full track object to play
+          console.log("Deep link request to play:", id);
+        }
+      } catch (e) {
+        console.error("Failed to parse deep link", e);
+      }
+    };
+
+    Linking.getInitialURL().then(handleDeepLink);
+    const subscription = Linking.addEventListener('url', ({ url }: any) => handleDeepLink(url));
+    
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   React.useEffect(() => {
     if (isLoading) return;
 

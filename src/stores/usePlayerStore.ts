@@ -182,11 +182,40 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   toggleDownload: (track) => {
     const { downloadedTracks } = get();
     const isDownloaded = downloadedTracks.some(t => t.id === track.id);
-    const newDownloaded = isDownloaded
-      ? downloadedTracks.filter(t => t.id !== track.id)
-      : [track, ...downloadedTracks];
-    set({ downloadedTracks: newDownloaded });
-    AsyncStorage.setItem('downloaded_tracks', JSON.stringify(newDownloaded)).catch(console.error);
+    
+    if (isDownloaded) {
+      const newDownloaded = downloadedTracks.filter(t => t.id !== track.id);
+      set({ downloadedTracks: newDownloaded });
+      AsyncStorage.setItem('downloaded_tracks', JSON.stringify(newDownloaded)).catch(console.error);
+    } else {
+      const newDownloaded = [track, ...downloadedTracks];
+      set({ downloadedTracks: newDownloaded });
+      AsyncStorage.setItem('downloaded_tracks', JSON.stringify(newDownloaded)).catch(console.error);
+      
+      // Trigger actual file download with ID3 tags via backend
+      if (Platform.OS !== 'web') {
+        try {
+          const FileSystem = require('expo-file-system');
+          const CACHE_DIR = `${FileSystem.documentDirectory}downloads/`;
+          FileSystem.makeDirectoryAsync(CACHE_DIR, { intermediates: true }).then(() => {
+            const fileUri = `${CACHE_DIR}${track.id}_${track.source || 'default'}.mp3`;
+            const rawAudio = track.source === 'deezer' ? track.audio : (track.audio || track.audiodownload);
+            
+            if (rawAudio) {
+              const backendUrl = `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api'}/catalog/download?audioUrl=${encodeURIComponent(rawAudio)}&title=${encodeURIComponent(track.name)}&artist=${encodeURIComponent(track.artist_name)}&album=${encodeURIComponent(track.album_name || '')}&imageUrl=${encodeURIComponent(track.image)}`;
+              
+              FileSystem.downloadAsync(backendUrl, fileUri)
+                .then(({ uri }: any) => {
+                  console.log('Successfully downloaded tagged file to:', uri);
+                })
+                .catch((e: any) => console.error('Failed to download tagged file', e));
+            }
+          });
+        } catch (e) {
+          console.error("Error setting up download", e);
+        }
+      }
+    }
   },
   downloadTracks: (tracks) => {
     const { downloadedTracks } = get();

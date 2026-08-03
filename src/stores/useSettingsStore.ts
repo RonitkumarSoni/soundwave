@@ -17,6 +17,7 @@ export interface SettingsState {
   dataSaver: boolean;
   canvasEnabled: boolean;
   carMode: boolean;
+  offlineMode: boolean;
 
   updateSetting: <K extends keyof Omit<SettingsState, "updateSetting" | "resetToDefaults" | "loadFromStorage">>(
     key: K,
@@ -42,6 +43,7 @@ const defaultSettings = {
   dataSaver: false,
   canvasEnabled: true,
   carMode: false,
+  offlineMode: false,
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   PanResponder,
 } from "react-native";
+import { Video, ResizeMode } from "expo-av";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather } from "@expo/vector-icons";
@@ -57,6 +58,19 @@ export default function NowPlayingScreen() {
   const canvasEnabled = useSettingsStore(s => s.canvasEnabled);
   const carMode = useSettingsStore(s => s.carMode);
   const bgScale = useSharedValue(1);
+
+  // Fallback aesthetic looping videos for Canvas
+  const CANVAS_VIDEOS = [
+    "https://assets.mixkit.co/videos/preview/mixkit-abstract-purple-and-pink-liquid-animation-99153-large.mp4",
+    "https://assets.mixkit.co/videos/preview/mixkit-ink-swirling-in-water-in-slow-motion-1188-large.mp4",
+    "https://assets.mixkit.co/videos/preview/mixkit-starry-night-sky-with-falling-stars-14811-large.mp4"
+  ];
+  
+  const getCanvasForTrack = (trackId: string) => {
+    // Generate a consistent index based on the track ID so the same song always gets the same video
+    const sum = trackId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return CANVAS_VIDEOS[sum % CANVAS_VIDEOS.length];
+  };
 
   React.useEffect(() => {
     if (canvasEnabled) {
@@ -328,12 +342,23 @@ export default function NowPlayingScreen() {
 
   return (
     <View style={styles.container}>
-      <Animated.Image
-        source={{ uri: track.image }}
-        style={[{ position: Platform.OS === 'web' ? 'fixed' as any : 'absolute', top: 0, bottom: 0, left: 0, right: 0, width: "100%", height: "100%" }, bgAnimatedStyle]}
-        blurRadius={Platform.OS === "web" ? 60 : 30}
-        resizeMode="cover"
-      />
+      {canvasEnabled ? (
+        <Video
+          source={{ uri: getCanvasForTrack(track.id) }}
+          style={{ position: Platform.OS === 'web' ? 'fixed' as any : 'absolute', top: 0, bottom: 0, left: 0, right: 0, width: "100%", height: "100%" }}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay
+          isLooping
+          isMuted
+        />
+      ) : (
+        <Animated.Image
+          source={{ uri: track.image }}
+          style={[{ position: Platform.OS === 'web' ? 'fixed' as any : 'absolute', top: 0, bottom: 0, left: 0, right: 0, width: "100%", height: "100%" }, bgAnimatedStyle]}
+          blurRadius={Platform.OS === "web" ? 60 : 30}
+          resizeMode="cover"
+        />
+      )}
       <View style={[{ position: Platform.OS === 'web' ? 'fixed' as any : 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: "rgba(0,0,0,0.45)" }]} />
       <LinearGradient
         colors={["rgba(0,0,0,0.6)", "transparent", "rgba(0,0,0,0.7)"]}

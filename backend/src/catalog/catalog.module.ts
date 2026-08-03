@@ -4,10 +4,11 @@ import { CatalogController } from './catalog.controller';
 import { SpotifyService } from './spotify.service';
 import { YoutubeService } from './youtube.service';
 import { YoutubeController } from './youtube.controller';
+import { GaanaService } from './gaana.service';
 
 @Module({
   imports: [ConfigModule],
   controllers: [CatalogController, YoutubeController],
-  providers: [SpotifyService, YoutubeService],
+  providers: [SpotifyService, YoutubeService, GaanaService],
 })
 export class CatalogModule {}
