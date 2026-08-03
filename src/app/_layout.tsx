@@ -24,6 +24,7 @@ export default function RootLayout() {
   const initLikedTracks = usePlayerStore((s) => s.initLikedTracks);
   const initDownloadedTracks = usePlayerStore((s) => s.initDownloadedTracks);
   const initFollowedAndSaved = usePlayerStore((s) => s.initFollowedAndSaved);
+  const initCustomPlaylists = usePlayerStore((s) => s.initCustomPlaylists);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
 
   // Keyboard shortcuts (web only)
@@ -65,6 +66,7 @@ export default function RootLayout() {
     initLikedTracks();
     initDownloadedTracks();
     initFollowedAndSaved();
+    initCustomPlaylists();
   }, []);
 
   React.useEffect(() => {

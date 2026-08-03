@@ -12,6 +12,7 @@ import { Track, usePlayerStore } from "@/stores/usePlayerStore";
 import { Feather } from "@expo/vector-icons";
 import { allTracks } from "@/data/mockData";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { AddToPlaylistModal } from "./AddToPlaylistModal";
 
 interface TrackRowProps {
   track: Track;
@@ -34,6 +35,7 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
   
   const [isMenuVisible, setMenuVisible] = React.useState(false);
   const [isDownloading, setIsDownloading] = React.useState(false);
+  const [isPlaylistModalVisible, setPlaylistModalVisible] = React.useState(false);
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
@@ -118,7 +120,8 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
   };
 
   return (
-    <Animated.View entering={FadeInDown.delay((index % 12) * 50).duration(300)}>
+    <>
+      <Animated.View style={{ width: '100%' }} entering={FadeInDown.delay((index % 12) * 50).duration(300)}>
       <TouchableOpacity
         style={styles.container}
         onPress={handleRowPress}
@@ -217,6 +220,14 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
               <Ionicons name="radio-outline" size={24} color="#FFF" />
               <Text style={styles.menuItemText}>Start Radio</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => { 
+              setMenuVisible(false);
+              setPlaylistModalVisible(true);
+            }}>
+              <Feather name="plus-square" size={24} color="#FFF" />
+              <Text style={styles.menuItemText}>Add to Playlist</Text>
+            </TouchableOpacity>
             
             <TouchableOpacity style={styles.menuItem} onPress={() => { 
               setMenuVisible(false); 
@@ -261,7 +272,14 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
           </View>
         </View>
       </Modal>
-    </Animated.View>
+      </Animated.View>
+
+      <AddToPlaylistModal 
+        visible={isPlaylistModalVisible}
+        onClose={() => setPlaylistModalVisible(false)}
+        track={track}
+      />
+    </>
   );
 }
 

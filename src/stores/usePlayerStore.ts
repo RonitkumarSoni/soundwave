@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+export interface CustomPlaylist {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: number;
+  tracks: Track[];
+}
+
 export interface Track {
   id: string;
   name: string;
@@ -31,6 +39,7 @@ interface PlayerState {
   playbackRate: number;
   sleepTimer: number | null;
   sleepTimerTimeout: any | null;
+  customPlaylists: CustomPlaylist[];
 
   setTrack: (track: Track) => void;
   togglePlay: () => void;
@@ -56,6 +65,13 @@ interface PlayerState {
   addToRecentlyPlayed: (track: Track) => void;
   initRecentlyPlayed: () => Promise<void>;
   setSleepTimer: (minutes: number | null) => void;
+
+  // Custom Playlists actions
+  createPlaylist: (name: string, description?: string) => void;
+  deletePlaylist: (id: string) => void;
+  addTrackToPlaylist: (playlistId: string, track: Track) => void;
+  removeTrackFromPlaylist: (playlistId: string, trackId: string) => void;
+  initCustomPlaylists: () => Promise<void>;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -75,6 +91,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   playbackRate: 1.0,
   sleepTimer: null,
   sleepTimerTimeout: null,
+  customPlaylists: [],
 
   setTrack: (track) => {
     set({ currentTrack: track, isPlaying: true, progress: 0, currentTimeMs: 0 });
@@ -296,5 +313,62 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }, minutes * 60 * 1000);
 
     set({ sleepTimer: minutes, sleepTimerTimeout: timeout });
+  },
+
+  createPlaylist: (name, description = "") => {
+    const { customPlaylists } = get();
+    const newPlaylist: CustomPlaylist = {
+      id: "cp_" + Date.now().toString(),
+      name,
+      description,
+      createdAt: Date.now(),
+      tracks: []
+    };
+    const updated = [newPlaylist, ...customPlaylists];
+    set({ customPlaylists: updated });
+    AsyncStorage.setItem('custom_playlists', JSON.stringify(updated)).catch(console.error);
+  },
+  
+  deletePlaylist: (id) => {
+    const { customPlaylists } = get();
+    const updated = customPlaylists.filter(p => p.id !== id);
+    set({ customPlaylists: updated });
+    AsyncStorage.setItem('custom_playlists', JSON.stringify(updated)).catch(console.error);
+  },
+
+  addTrackToPlaylist: (playlistId, track) => {
+    const { customPlaylists } = get();
+    const updated = customPlaylists.map(p => {
+      if (p.id === playlistId) {
+        // Only add if not already in playlist
+        if (!p.tracks.some(t => t.id === track.id)) {
+          return { ...p, tracks: [...p.tracks, track] };
+        }
+      }
+      return p;
+    });
+    set({ customPlaylists: updated });
+    AsyncStorage.setItem('custom_playlists', JSON.stringify(updated)).catch(console.error);
+  },
+
+  removeTrackFromPlaylist: (playlistId, trackId) => {
+    const { customPlaylists } = get();
+    const updated = customPlaylists.map(p => {
+      if (p.id === playlistId) {
+        return { ...p, tracks: p.tracks.filter(t => t.id !== trackId) };
+      }
+      return p;
+    });
+    set({ customPlaylists: updated });
+    AsyncStorage.setItem('custom_playlists', JSON.stringify(updated)).catch(console.error);
+  },
+
+  initCustomPlaylists: async () => {
+    try {
+      const stored = await AsyncStorage.getItem('custom_playlists');
+      if (stored) set({ customPlaylists: JSON.parse(stored) });
+    } catch (e) {
+      console.error('Failed to load custom playlists', e);
+    }
   }
 }));

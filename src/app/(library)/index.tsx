@@ -36,6 +36,7 @@ export default function LibraryScreen() {
   const followedArtists = usePlayerStore((s) => s.followedArtists);
   const savedAlbums = usePlayerStore((s) => s.savedAlbums);
   const recentlyPlayed = usePlayerStore((s) => s.recentlyPlayed);
+  const customPlaylists = usePlayerStore((s) => s.customPlaylists);
 
   useEffect(() => {
     const loadData = async () => {
@@ -249,6 +250,31 @@ export default function LibraryScreen() {
                     </TouchableOpacity>
                   </TouchableOpacity>
                 ))}
+                
+                {/* Custom Playlists */}
+                {customPlaylists
+                  .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map(cp => (
+                  <TouchableOpacity 
+                    key={cp.id} 
+                    style={styles.playlistItem}
+                    onPress={() => router.push(`/custom-playlist/${cp.id}`)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.playlistInfo}>
+                      <Text style={styles.playlistName}>{cp.name}</Text>
+                      <Text style={styles.playlistSub}>{cp.tracks.length} tracks • Custom</Text>
+                    </View>
+                    <TouchableOpacity 
+                      style={{ padding: spacing.sm }}
+                      onPress={() => {
+                        // TODO options
+                      }}
+                    >
+                      <Ionicons name="chevron-forward" size={20} color={colors.secondaryLabel} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
 
@@ -272,7 +298,7 @@ export default function LibraryScreen() {
               </View>
             )}
             
-            {(activeTab !== "Playlists" && activeTab !== "Artists" && activeTab !== "Albums" && sortedTracks.length === 0) && (
+            {(activeTab !== "All" && activeTab !== "Playlists" && activeTab !== "Artists" && activeTab !== "Albums" && sortedTracks.length === 0) && (
               <View style={{ alignItems: 'center', marginTop: 40 }}>
                 <Text style={{ color: 'rgba(255,255,255,0.7)' }}>
                   {activeTab === "Downloads" ? "No downloaded tracks yet." : 
@@ -454,6 +480,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.surfaceBorder,
   },

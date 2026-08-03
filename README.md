@@ -1,56 +1,69 @@
-# Welcome to your Expo app 👋
+# Soundwave Music App 🎵
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Soundwave is a beautiful, modern, cross-platform music streaming application built with React Native and Expo. Designed with performance and aesthetics in mind, Soundwave aggregates music from various platforms (YouTube Music, Spotify, JioSaavn) and offers a premium user experience with custom playlist creation, offline downloads, and smooth animations.
 
-## Get started
+## Features ✨
+- **Universal Search:** Seamlessly search and stream music aggregated from multiple sources (JioSaavn, Spotify, YouTube Music).
+- **Custom Playlists:** Create personalized playlists, add your favorite tracks, and play them directly from your library.
+- **Offline Downloads:** Download your favorite tracks for offline listening.
+- **Stunning UI/UX:** Built with a beautiful dark mode interface featuring glassmorphism elements, animated transitions, and haptic feedback.
+- **Audio Player:** Robust background audio playback and control using `expo-av` and Zustand for state management.
+- **Cross-Platform:** Works on Android, iOS, and the Web.
 
-1. Install dependencies
+## Tech Stack 🛠
+- **Frontend Framework:** React Native / Expo (Expo Router)
+- **State Management:** Zustand (with AsyncStorage for persistence)
+- **Styling:** React Native Stylesheet, Expo Linear Gradient, Blur Views
+- **Animations:** React Native Reanimated
+- **Icons:** Expo Vector Icons, Feather Icons
+- **Backend/API:** Custom NestJS API (Soundwave Backend) for track resolution
 
+## Getting Started 🚀
+
+### Prerequisites
+Make sure you have Node.js and npm installed. You will also need the [Expo CLI](https://docs.expo.dev/get-started/installation/) if you don't have it.
+
+### Installation
+
+1. **Clone the repository** (if you haven't already):
+   ```bash
+   git clone https://github.com/yourusername/soundwave.git
+   cd soundwave
+   ```
+
+2. **Install dependencies:**
    ```bash
    npm install
    ```
 
-2. Start the app
-
-   ```bash
-   npx expo start
+3. **Environment Setup:**
+   Create a `.env` file in the root directory and add your backend API URL (if applicable).
+   ```env
+   EXPO_PUBLIC_API_URL=http://localhost:3000
    ```
 
-In the output, you'll find options to open the app in a
+4. **Run the Application:**
+   Start the Expo development server:
+   ```bash
+   npx expo start -c
+   ```
+   
+   From the Expo CLI, you can press:
+   - `a` to open on an Android emulator/device
+   - `i` to open on an iOS simulator
+   - `w` to open on the web browser
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Project Structure 📁
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- `src/app/` - Expo Router file-based navigation (tabs, screens, modals)
+- `src/components/` - Reusable UI components (TrackRow, AppHeader, Modals)
+- `src/stores/` - Zustand global state management stores
+- `src/lib/` - API clients, utility functions
+- `src/theme/` - Centralized colors, gradients, and styling constants
+- `src/data/` - Mock data and placeholder files
 
-## Get a fresh project
+## Contributing 🤝
+Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change. 
 
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-### Other setup steps
-
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## License 📄
+This project is licensed under the MIT License - see the LICENSE file for details.
