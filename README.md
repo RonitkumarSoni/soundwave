@@ -1,5 +1,12 @@
 # Soundwave Music App 🎵
 
+## Repository layout
+
+- The repository root contains the Expo Android/iOS app and its web export.
+- `backend/` contains the NestJS backend and the merged backend recovery fixes.
+- `web/` preserves the separate Vite web frontend previously on GitHub main, with its own dependencies and build configuration. Run `npm ci --prefix web`, then `npm --prefix web run dev` or `npm --prefix web run build` to work on that version. Its Firebase configuration still contains placeholders.
+
+
 Soundwave is a beautiful, modern, cross-platform music streaming application built with React Native and Expo. Designed with performance and aesthetics in mind, Soundwave aggregates music from various platforms (YouTube Music, Spotify, JioSaavn) and offers a premium user experience with custom playlist creation, offline downloads, and smooth animations.
 
 ## Features ✨
