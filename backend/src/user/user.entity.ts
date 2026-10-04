@@ -3,13 +3,15 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  OneToMany,
 } from 'typeorm';
 
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'varchar', nullable: true, unique: true })
+  firebase_uid: string | null;
 
   @Column({ unique: true })
   email: string;
@@ -28,6 +30,9 @@ export class User {
 
   @Column({ default: false })
   is_premium: boolean;
+
+  @Column({ type: Date, nullable: true })
+  premium_expires_at: Date | null;
 
   @CreateDateColumn()
   created_at: Date;

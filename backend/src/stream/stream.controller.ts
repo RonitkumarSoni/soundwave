@@ -1,6 +1,21 @@
-import { Controller, Get, Param, Res, Req, Headers, HttpStatus, HttpException, Logger } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import type { Readable } from 'node:stream';
+import type { AxiosRequestConfig } from 'axios';
+import {
+  Controller,
+  Get,
+  Param,
+  Res,
+  Req,
+  Headers,
+  HttpStatus,
+  HttpException,
+  Logger,
+} from '@nestjs/common';
 import { JamendoService } from '../jamendo/jamendo.service';
 import axios from 'axios';
+import { Agent } from 'node:https';
+import { validateRemoteUrl, publicLookup } from '../security/remote-fetch';
 
 @Controller('stream')
 export class StreamController {
@@ -11,8 +26,8 @@ export class StreamController {
   @Get('jamendo/:id')
   async streamJamendo(
     @Param('id') id: string,
-    @Req() req: any,
-    @Res() res: any,
+    @Req() req: Request,
+    @Res() res: Response,
     @Headers('range') rangeHeader?: string,
   ) {
     try {
@@ -22,21 +37,27 @@ export class StreamController {
         throw new HttpException('Audio not found', HttpStatus.NOT_FOUND);
       }
 
-      const audioUrl = track.audio;
-      
+      const audioUrl = validateRemoteUrl(track.audio).toString();
+
       // 2. Proxy the request to bypass CORS
-      const axiosConfig: any = {
+      const axiosConfig: AxiosRequestConfig = {
         method: 'get',
         url: audioUrl,
         responseType: 'stream',
+        timeout: 15000,
+        maxRedirects: 0,
+        proxy: false,
+        httpsAgent: new Agent({ lookup: publicLookup }),
         headers: {},
       };
 
       if (rangeHeader) {
-        axiosConfig.headers['Range'] = rangeHeader;
+        if (!/^bytes=\d*-\d*$/.test(rangeHeader))
+          throw new HttpException('Invalid range', HttpStatus.BAD_REQUEST);
+        axiosConfig.headers = { Range: rangeHeader };
       }
 
-      const response = await axios(axiosConfig);
+      const response = await axios.request<Readable>(axiosConfig);
 
       // 3. Forward the headers from Jamendo's server to the client
       const headersToForward = [
@@ -46,26 +67,41 @@ export class StreamController {
         'content-range',
       ];
 
-      headersToForward.forEach(header => {
+      headersToForward.forEach((header) => {
         if (response.headers[header]) {
-          res.setHeader(header, response.headers[header]);
+          res.setHeader(header, String(response.headers[header]));
         }
       });
 
       // Explicitly set CORS for the stream since piping can sometimes bypass NestJS global CORS
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Range');
 
       res.status(response.status);
 
       // 4. Pipe the audio stream directly to the client
+      res.on('close', () => response.data.destroy());
+      response.data.on('error', () => {
+        if (!res.headersSent) res.status(502).send('Stream interrupted');
+        else res.destroy();
+      });
+      if (req.method === 'HEAD') {
+        response.data.destroy();
+        res.end();
+        return;
+      }
       response.data.pipe(res);
-
-    } catch (error: any) {
-      this.logger.error(`Failed to stream track ${id}:`, error.message);
+    } catch (error) {
+      this.logger.error(
+        `Failed to stream track ${id}:`,
+        error instanceof Error ? error.message : 'Stream unavailable',
+      );
       if (!res.headersSent) {
-        res.status(error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR).send('Stream error');
+        res
+          .status(
+            error instanceof HttpException
+              ? error.getStatus()
+              : HttpStatus.BAD_GATEWAY,
+          )
+          .send('Stream error');
       }
     }
   }

@@ -88,7 +88,9 @@ export class JamendoService {
         '⚠️  JAMENDO_CLIENT_ID not set! Set it in .env to enable music catalog.',
       );
     } else {
-      this.logger.log(`✅ Jamendo API initialized with client_id: ${this.clientId.substring(0, 8)}...`);
+      this.logger.log(
+        `✅ Jamendo API initialized with client_id: ${this.clientId.substring(0, 8)}...`,
+      );
     }
   }
 
@@ -243,7 +245,7 @@ export class JamendoService {
     offset = 0,
   ): Promise<JamendoResponse<JamendoArtist>> {
     try {
-      const params: any = {
+      const params: Record<string, string | number> = {
         limit: Math.min(limit, 200),
         offset,
         imagesize: 600,
@@ -375,16 +377,15 @@ export class JamendoService {
     limit = 10,
   ): Promise<JamendoResponse<{ match: string }>> {
     try {
-      const { data } = await this.client.get<JamendoResponse<{ match: string }>>(
-        '/autocomplete/',
-        {
-          params: {
-            prefix,
-            limit: Math.min(limit, 200),
-            entity: 'tracks',
-          },
+      const { data } = await this.client.get<
+        JamendoResponse<{ match: string }>
+      >('/autocomplete/', {
+        params: {
+          prefix,
+          limit: Math.min(limit, 200),
+          entity: 'tracks',
         },
-      );
+      });
       return data;
     } catch (error) {
       this.handleError('autocomplete', error);
@@ -455,13 +456,13 @@ export class JamendoService {
     }
   }
 
-  private handleError(method: string, error: any): void {
-    if (axios.isAxiosError(error)) {
+  private handleError(method: string, error: unknown): void {
+    if (axios.isAxiosError<{ headers?: { error_message?: string } }>(error)) {
       this.logger.error(
         `Jamendo ${method} failed: ${error.response?.status} ${error.response?.data?.headers?.error_message || error.message}`,
       );
     } else {
-      this.logger.error(`Jamendo ${method} failed: ${error.message}`);
+      this.logger.error('Jamendo ' + method + ' failed', error);
     }
   }
 }
