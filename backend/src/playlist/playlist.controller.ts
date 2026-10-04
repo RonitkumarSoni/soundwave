@@ -1,97 +1,110 @@
+import type { AuthenticatedRequest } from '../auth/authenticated-request';
 import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
   UseGuards,
   Request,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { PlaylistService } from './playlist.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import {
+  CreatePlaylistDto,
+  UpdatePlaylistDto,
+  AddTrackDto,
+} from './playlist.dto';
 
+@UseGuards(JwtAuthGuard)
 @Controller('playlists')
 export class PlaylistController {
-  constructor(private readonly playlistService: PlaylistService) {}
-
-  // ─── PLAYLISTS ───
-
-  @UseGuards(JwtAuthGuard)
+  constructor(private readonly playlists: PlaylistService) {}
   @Post()
-  async createPlaylist(
-    @Request() req: any,
-    @Body() body: { title: string; cover_url?: string },
+  createPlaylist(
+    @Request() req: AuthenticatedRequest,
+    @Body() body: CreatePlaylistDto,
   ) {
-    return this.playlistService.createPlaylist(
+    return this.playlists.createPlaylist(
       req.user.id,
-      body.title,
+      body.title.trim(),
       body.cover_url,
     );
   }
-
-  @UseGuards(JwtAuthGuard)
   @Get()
-  async getMyPlaylists(@Request() req: any) {
-    return this.playlistService.getUserPlaylists(req.user.id);
+  getMyPlaylists(@Request() req: AuthenticatedRequest) {
+    return this.playlists.getUserPlaylists(req.user.id);
   }
-
-  @Get(':id')
-  async getPlaylistById(@Param('id') id: string) {
-    return this.playlistService.getPlaylistById(id);
+  @Get('likes')
+  getLikedTracks(@Request() req: AuthenticatedRequest) {
+    return this.playlists.getLikedTracks(req.user.id);
   }
-
-  @UseGuards(JwtAuthGuard)
-  @Post(':id/tracks')
-  async addTrack(
-    @Param('id') id: string,
-    @Body() body: { track_id: string },
+  @Post('likes/:trackId')
+  likeTrack(
+    @Request() req: AuthenticatedRequest,
+    @Param('trackId') id: string,
   ) {
-    return this.playlistService.addTrackToPlaylist(id, body.track_id);
+    return this.playlists.likeTrack(req.user.id, id);
   }
-
-  @UseGuards(JwtAuthGuard)
+  @Delete('likes/:trackId')
+  unlikeTrack(
+    @Request() req: AuthenticatedRequest,
+    @Param('trackId') id: string,
+  ) {
+    return this.playlists.unlikeTrack(req.user.id, id);
+  }
+  @Get('likes/:trackId/check')
+  async isLiked(
+    @Request() req: AuthenticatedRequest,
+    @Param('trackId') id: string,
+  ) {
+    return { liked: await this.playlists.isTrackLiked(req.user.id, id) };
+  }
+  @Get(':id')
+  getPlaylistById(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.playlists.getPlaylistById(id, req.user.id);
+  }
+  @Patch(':id')
+  updatePlaylist(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePlaylistDto,
+  ) {
+    return this.playlists.updatePlaylist(id, req.user.id, dto);
+  }
+  @Post(':id/tracks')
+  addTrack(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddTrackDto,
+  ) {
+    return this.playlists.addTrackToPlaylist(
+      id,
+      dto.track_id,
+      req.user.id,
+      dto.source,
+      dto.track,
+    );
+  }
   @Delete(':id/tracks/:trackId')
-  async removeTrack(
-    @Param('id') id: string,
+  removeTrack(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
     @Param('trackId') trackId: string,
   ) {
-    return this.playlistService.removeTrackFromPlaylist(id, trackId);
+    return this.playlists.removeTrackFromPlaylist(id, trackId, req.user.id);
   }
-
-  @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  async deletePlaylist(@Request() req: any, @Param('id') id: string) {
-    return this.playlistService.deletePlaylist(id, req.user.id);
-  }
-
-  // ─── LIKED TRACKS ───
-
-  @UseGuards(JwtAuthGuard)
-  @Post('likes/:trackId')
-  async likeTrack(@Request() req: any, @Param('trackId') trackId: string) {
-    return this.playlistService.likeTrack(req.user.id, trackId);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Delete('likes/:trackId')
-  async unlikeTrack(@Request() req: any, @Param('trackId') trackId: string) {
-    return this.playlistService.unlikeTrack(req.user.id, trackId);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('likes')
-  async getLikedTracks(@Request() req: any) {
-    return this.playlistService.getLikedTracks(req.user.id);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('likes/:trackId/check')
-  async isLiked(@Request() req: any, @Param('trackId') trackId: string) {
-    const liked = await this.playlistService.isTrackLiked(
-      req.user.id,
-      trackId,
-    );
-    return { liked };
+  deletePlaylist(
+    @Request() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.playlists.deletePlaylist(id, req.user.id);
   }
 }

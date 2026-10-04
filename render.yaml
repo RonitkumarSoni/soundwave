@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: soundwave-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "24.14.0"
+      - key: NODE_ENV
+        value: production
+      - key: SERVICE_NAME
+        value: monolith
+      - key: FIREBASE_PROJECT_ID
+        value: music-app-92cbb
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: JAMENDO_CLIENT_ID
+        value: bc277c86
+      - key: DATABASE_URL
+        sync: false

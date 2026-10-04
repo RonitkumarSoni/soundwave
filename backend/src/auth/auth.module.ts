@@ -1,29 +1,15 @@
-import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
-import { JwtStrategy } from './jwt.strategy';
+import { Global, Module } from '@nestjs/common';
 import { UserModule } from '../user/user.module';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { FirebaseIdentityService } from './firebase-identity.service';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
+@Global()
 @Module({
-  imports: [
-    UserModule,
-    PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'default-secret-change-me'),
-        signOptions: {
-          expiresIn: config.get<string>('JWT_ACCESS_EXPIRY', '15m') as any,
-        },
-      }),
-    }),
-  ],
-  providers: [AuthService, JwtStrategy],
+  imports: [UserModule],
   controllers: [AuthController],
-  exports: [AuthService],
+  providers: [AuthService, FirebaseIdentityService, JwtAuthGuard],
+  exports: [FirebaseIdentityService, JwtAuthGuard, UserModule],
 })
 export class AuthModule {}
