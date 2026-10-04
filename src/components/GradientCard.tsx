@@ -1,12 +1,12 @@
 import React from "react";
-import { View, StyleSheet, ViewStyle } from "react-native";
+import { StyleSheet, ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, gradients, borderRadius } from "@/theme/colors";
 
 interface GradientCardProps {
   children: React.ReactNode;
   style?: ViewStyle;
-  gradientColors?: readonly string[];
+  gradientColors?: readonly [string, string, ...string[]];
 }
 
 export function GradientCard({
@@ -16,7 +16,7 @@ export function GradientCard({
 }: GradientCardProps) {
   return (
     <LinearGradient
-      colors={(gradientColors || gradients.forYouCard) as string[]}
+      colors={gradientColors || gradients.forYouCard}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[styles.card, style]}

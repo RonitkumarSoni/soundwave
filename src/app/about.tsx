@@ -1,11 +1,11 @@
-import { Image } from 'expo-image';
+
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, gradients, spacing, borderRadius } from '@/theme/colors';
+import { colors, gradients, spacing } from '@/theme/colors';
 
 export default function AboutScreen() {
   const router = useRouter();
@@ -17,7 +17,7 @@ export default function AboutScreen() {
         colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
         style={StyleSheet.absoluteFill}
       />
-      
+
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={24} color="#FFF" />
@@ -27,7 +27,7 @@ export default function AboutScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+
         <View style={styles.logoContainer}>
           <View style={styles.logoPlaceholder}>
             <Feather name="music" size={48} color={colors.accentSolid} />
@@ -39,7 +39,7 @@ export default function AboutScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Terms & Conditions</Text>
           <Text style={styles.bodyText}>
-            Welcome to Soundwave! These terms and conditions outline the rules and regulations for the use of the Soundwave App. 
+            Welcome to Soundwave! These terms and conditions outline the rules and regulations for the use of the Soundwave App.
             By accessing this app, we assume you accept these terms and conditions. Do not continue to use Soundwave if you do not agree to take all of the terms and conditions stated on this page.
           </Text>
           <Text style={styles.bodyText}>

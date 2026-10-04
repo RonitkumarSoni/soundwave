@@ -13,7 +13,7 @@ export default function AboutScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient colors={[gradients.background[0], gradients.background[1]]} style={StyleSheet.absoluteFill} />
-      
+
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={24} color="#FFF" />

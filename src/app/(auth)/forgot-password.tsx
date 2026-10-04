@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import { api } from '@/lib/api';
+import Toast from 'react-native-toast-message';
 import { colors, gradients, spacing } from '@/theme/colors';
 import { auth } from '@/lib/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  
+
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
@@ -22,11 +22,11 @@ export default function ForgotPasswordScreen() {
       if (Platform.OS === 'web') {
         setAlertConfig({ visible: true, title: 'Missing Field', message: 'Please enter your email to receive a reset link.' });
       } else {
-        Alert.alert('Missing Field', 'Please enter your email to receive a reset link.');
+        Toast.show({ type: 'error', text1: 'Missing Field', text2: 'Please enter your email to receive a reset link.' });
       }
       return;
     }
-    
+
     setIsLoading(true);
     try {
       await sendPasswordResetEmail(auth, email);
@@ -41,7 +41,7 @@ export default function ForgotPasswordScreen() {
       if (Platform.OS === 'web') {
         setAlertConfig({ visible: true, title: 'Error', message: errorMsg });
       } else {
-        Alert.alert('Error', errorMsg);
+        Toast.show({ type: 'error', text1: 'Error', text2: errorMsg });
       }
     } finally {
       setIsLoading(false);
@@ -60,6 +60,7 @@ export default function ForgotPasswordScreen() {
           if (router.canGoBack()) {
             router.back();
           } else {
+            Keyboard.dismiss();
             router.replace('/(auth)/login');
           }
         }}>
@@ -70,7 +71,7 @@ export default function ForgotPasswordScreen() {
           <Ionicons name="lock-closed" size={64} color="#FFF" />
           <Text style={styles.title}>Reset Password</Text>
           <Text style={styles.subtitle}>
-            {isSent 
+            {isSent
               ? "We've sent a password reset link to your email."
               : "Enter your email address and we'll send you a link to reset your password."}
           </Text>
@@ -80,7 +81,7 @@ export default function ForgotPasswordScreen() {
           <View style={styles.form}>
             <View style={styles.inputContainer}>
               <Ionicons name="mail-outline" size={20} color="rgba(255,255,255,0.7)" style={styles.inputIcon} />
-              <TextInput
+              <TextInput autoComplete="off" importantForAutofill="noExcludeDescendants" textContentType="none"
                 style={styles.input}
                 placeholder="Email"
                 placeholderTextColor="rgba(255,255,255,0.5)"
@@ -107,6 +108,7 @@ export default function ForgotPasswordScreen() {
             if (router.canGoBack()) {
               router.back();
             } else {
+              Keyboard.dismiss();
               router.replace('/(auth)/login');
             }
           }}>

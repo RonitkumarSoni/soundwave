@@ -4,14 +4,14 @@ import { FlatList, View, Text, TouchableOpacity, StyleSheet, Dimensions, NativeS
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 
-import { colors, gradients, spacing, borderRadius } from "@/theme/colors";
+import { colors, spacing, borderRadius } from "@/theme/colors";
 import { promoCards, PromoCard } from "@/data/mockData";
-import { api } from "@/lib/api";
-import { usePlayerStore } from "@/stores/usePlayerStore";
+
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 // Limit max width so images aren't stretched into very wide panoramas on web
-const MAX_CARD_WIDTH = 340; 
+const MAX_CARD_WIDTH = 340;
 const CARD_WIDTH = Math.min(SCREEN_WIDTH - spacing.lg * 2, MAX_CARD_WIDTH);
 const CARD_HEIGHT = 180;
 
@@ -19,8 +19,8 @@ export function ForYouCarousel() {
   const [activeIndex, setActiveIndex] = useState(0);
   const flashListRef = useRef<FlatList<any>>(null);
   const isDragging = useRef(false);
-  const setTrack = usePlayerStore((s) => s.setTrack);
-  const setQueue = usePlayerStore((s) => s.setQueue);
+
+
   const router = useRouter();
 
   const handleCtaPress = (searchQuery: string) => {
@@ -98,7 +98,6 @@ export function ForYouCarousel() {
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
-        estimatedItemSize={CARD_WIDTH}
         contentContainerStyle={{ paddingHorizontal: spacing.lg }}
         getItemLayout={(_, index) => ({
           length: CARD_WIDTH + spacing.lg,

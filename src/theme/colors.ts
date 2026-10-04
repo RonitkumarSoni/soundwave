@@ -23,6 +23,9 @@ export const colors = {
   chipInactiveBg: "rgba(255,255,255,0.04)",
 
   danger: "#FF5C7A",
+  error: "#FF5C7A",
+  background: "#170B2E",
+  primary: "#9B4DFF",
 };
 
 export const gradients = {

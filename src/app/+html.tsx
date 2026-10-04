@@ -9,23 +9,23 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-        
+
         {/* Title and Description */}
         <title>Soundwave — Premium Music Player</title>
         <meta name="description" content="Discover, stream, and enjoy your favorite music with Soundwave. A premium listening experience." />
-        
+
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:title" content="Soundwave — Premium Music Player" />
         <meta property="og:description" content="Discover, stream, and enjoy your favorite music with Soundwave. A premium listening experience." />
         <meta property="og:image" content="https://soundwave-studio-app.vercel.app/og-image.jpg" />
-        
+
         {/* Twitter */}
         <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:title" content="Soundwave — Premium Music Player" />
         <meta property="twitter:description" content="Discover, stream, and enjoy your favorite music with Soundwave. A premium listening experience." />
         <meta property="twitter:image" content="https://soundwave-studio-app.vercel.app/og-image.jpg" />
-        
+
         {/* Advanced SEO */}
         <meta name="keywords" content="music player, free music streaming, listen to music online, premium music app, soundwave app, online audio player" />
         <link rel="canonical" href="https://soundwave-studio-app.vercel.app/" />

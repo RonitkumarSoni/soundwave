@@ -3,12 +3,18 @@
     "name": "soundwave",
     "slug": "soundwave",
     "version": "1.0.0",
+    "newArchEnabled": false,
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/soundwave-logo-v2.png",
     "scheme": "soundwave",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/soundwave-logo-v2.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#170B2E"
+    },
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/soundwave-logo-v2.png",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
@@ -17,10 +23,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#170B2E",
+        "foregroundImage": "./assets/images/soundwave-logo-v2.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.ronit55.soundwave",
@@ -29,27 +33,28 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "WAKE_LOCK",
-        "FOREGROUND_SERVICE"
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/soundwave-logo-v2.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "image": "./assets/images/soundwave-logo-v2.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#170B2E"
         }
       ],
+      "expo-file-system",
       "expo-av",
-      "expo-web-browser",
-      "expo-image",
-      "expo-status-bar"
+      "@react-native-google-signin/google-signin",
+      "./plugins/withNoAutofill"
     ],
     "experiments": {
       "typedRoutes": true,

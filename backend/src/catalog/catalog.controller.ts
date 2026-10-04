@@ -1,17 +1,36 @@
-import { Controller, Get, Query, Param, Headers, Post, Body, Res } from '@nestjs/common';
+import type { AuthenticatedRequest } from '../auth/authenticated-request';
+import {
+  Controller,
+  Get,
+  Query,
+  Param,
+  Headers,
+  Post,
+  Body,
+  Res,
+  UseGuards,
+  Request,
+  ForbiddenException,
+  ServiceUnavailableException,
+  HttpException,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { SpotifyService } from './spotify.service';
-// @ts-ignore
-import * as translate from 'translate-google';
 import * as NodeID3 from 'node-id3';
-import axios from 'axios';
 import { GaanaService } from './gaana.service';
+import { fetchRemote } from '../security/remote-fetch';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Throttle } from '@nestjs/throttler';
+import { JamendoService } from '../jamendo/jamendo.service';
+
+let activeDownloads = 0;
 
 @Controller('catalog')
 export class CatalogController {
   constructor(
     private readonly spotify: SpotifyService,
     private readonly gaana: GaanaService,
+    private readonly jamendo: JamendoService,
   ) {}
 
   /**
@@ -20,8 +39,7 @@ export class CatalogController {
    */
   @Get('proxy')
   async proxy(@Query('url') url: string) {
-    const axios = require('axios');
-    const { data } = await axios.get(url);
+    const { data } = await fetchRemote(url);
     return data;
   }
 
@@ -30,8 +48,22 @@ export class CatalogController {
    * Verify total catalog count
    */
   @Get('stats')
-  async getStats() {
-    return { totalTracks: 'Millions', status: 'success' };
+  getStats() {
+    return {
+      totalTracks: null,
+      status: 'unavailable',
+      message: 'A verified catalog count is not available',
+    };
+  }
+
+  @Get('jamendo/:id')
+  getJamendoTrack(@Param('id') id: string) {
+    return this.jamendo.getTrackById(id);
+  }
+
+  @Get('albums/:id')
+  getAlbum(@Param('id') id: string) {
+    return this.spotify.getAlbumById(id);
   }
 
   /**
@@ -43,7 +75,6 @@ export class CatalogController {
     @Query('q') query?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
-    @Query('order') order?: string,
   ) {
     const lim = Math.min(parseInt(limit || '20', 10), 50);
     const off = parseInt(offset || '0', 10);
@@ -92,10 +123,10 @@ export class CatalogController {
   ) {
     const lim = Math.min(parseInt(limit || '20', 10), 50);
     const off = parseInt(offset || '0', 10);
-    
+
     // If no query, return some popular artists as fallback
     if (!query) {
-       return this.spotify.searchArtists('pop', lim, off);
+      return this.spotify.searchArtists('pop', lim, off);
     }
     return this.spotify.searchArtists(query, lim, off);
   }
@@ -146,17 +177,14 @@ export class CatalogController {
   }
 
   @Get('search')
-  async search(
-    @Query('q') query: string,
-    @Query('limit') limit?: string,
-  ) {
+  async search(@Query('q') query: string, @Query('limit') limit?: string) {
     if (!query || query.length < 2) {
       return { tracks: [], artists: [], albums: [] };
     }
 
     const lim = Math.min(parseInt(limit || '10', 10), 20);
 
-    const [spotifyTracks, spotifyArtists, spotifyAlbums, gaanaTracks] = await Promise.all([
+    const [tracks, artists, albums, gaana] = await Promise.allSettled([
       this.spotify.searchTracks(query, lim),
       this.spotify.searchArtists(query, lim),
       this.spotify.searchAlbums(query, lim),
@@ -164,12 +192,18 @@ export class CatalogController {
     ]);
 
     // Merge Spotify and Gaana tracks. Put Gaana first since they have direct stream URLs and are great for Indian music
-    const mergedTracks = [...gaanaTracks.results, ...spotifyTracks.results].slice(0, lim * 2);
+    const spotifyTracks =
+      tracks.status === 'fulfilled' ? tracks.value.results : [];
+    const gaanaTracks = gaana.status === 'fulfilled' ? gaana.value.results : [];
+    const mergedTracks = [...gaanaTracks, ...spotifyTracks].slice(0, lim * 2);
 
     return {
       tracks: mergedTracks,
-      artists: spotifyArtists.results,
-      albums: spotifyAlbums.results,
+      artists: artists.status === 'fulfilled' ? artists.value.results : [],
+      albums: albums.status === 'fulfilled' ? albums.value.results : [],
+      partial: [tracks, artists, albums, gaana].some(
+        (result) => result.status === 'rejected',
+      ),
     };
   }
 
@@ -181,7 +215,7 @@ export class CatalogController {
   async autocomplete(@Query('q') prefix: string) {
     if (!prefix) return { results: [] };
     const res = await this.spotify.searchTracks(prefix, 10);
-    return { results: res.results.map(t => ({ match: t.name })) };
+    return { results: res.results.map((t) => ({ match: t.name })) };
   }
 
   /**
@@ -217,17 +251,10 @@ export class CatalogController {
    * Translate text using translate-google
    */
   @Post('translate-lyrics')
-  async translateLyrics(@Body() body: { text: string, lang?: string }) {
-    if (!body.text) {
-      return { error: 'Text is required' };
-    }
-    try {
-      const res = await translate(body.text, { to: body.lang || 'en' });
-      return { translatedText: res };
-    } catch (err) {
-      console.error('Translation error:', err);
-      return { error: 'Translation failed' };
-    }
+  translateLyrics() {
+    throw new ServiceUnavailableException(
+      'Lyrics translation is currently unavailable',
+    );
   }
 
   /**
@@ -235,21 +262,56 @@ export class CatalogController {
    * Download audio and embed ID3 tags
    */
   @Get('download')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard)
   async downloadTagged(
+    @Request() req: AuthenticatedRequest,
     @Query('audioUrl') audioUrl: string,
     @Query('title') title: string,
     @Query('artist') artist: string,
     @Query('album') album: string,
     @Query('imageUrl') imageUrl: string,
-    @Res() res: Response
+    @Res() res: Response,
   ) {
-    if (!audioUrl) return res.status(400).send({ error: 'Audio URL is required' });
+    if (!audioUrl)
+      return res.status(400).send({ error: 'Audio URL is required' });
+    if (!req.user.is_premium)
+      throw new ForbiddenException('An active subscription is required');
+    if (activeDownloads >= 2)
+      throw new ServiceUnavailableException(
+        'Downloads are busy. Retry shortly.',
+      );
+    activeDownloads++;
 
     try {
-      const audioResponse = await axios.get(audioUrl, { responseType: 'arraybuffer' });
+      const audioResponse = await fetchRemote<Buffer>(
+        audioUrl,
+        30 * 1024 * 1024,
+        'arraybuffer',
+      );
       const audioBuffer = Buffer.from(audioResponse.data);
+      const mime = String(audioResponse.headers['content-type'] || '').split(
+        ';',
+      )[0];
+      const formats: Record<string, string> = {
+        'audio/mp4': 'm4a',
+        'video/mp4': 'm4a',
+        'audio/aac': 'aac',
+        'audio/ogg': 'ogg',
+        'audio/webm': 'webm',
+        'video/webm': 'webm',
+      };
+      if (formats[mime]) {
+        res.set({
+          'Content-Type': mime,
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(title || 'track')}.${formats[mime]}"`,
+        });
+        return res.send(audioBuffer);
+      }
+      if (!['audio/mpeg', 'audio/mp3'].includes(mime))
+        return res.status(415).send({ error: 'Unsupported audio format' });
 
-      let tags: any = {
+      const tags: NodeID3.Tags = {
         title: title || 'Unknown Title',
         artist: artist || 'Unknown Artist',
         album: album || 'Unknown Album',
@@ -257,15 +319,19 @@ export class CatalogController {
 
       if (imageUrl) {
         try {
-          const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+          const imageResponse = await fetchRemote<Buffer>(
+            imageUrl,
+            2 * 1024 * 1024,
+            'arraybuffer',
+          );
           tags.image = {
             mime: 'image/jpeg',
             type: {
               id: 3,
-              name: 'front cover'
+              name: 'front cover',
             },
             description: 'Cover',
-            imageBuffer: Buffer.from(imageResponse.data)
+            imageBuffer: Buffer.from(imageResponse.data),
           };
         } catch (e) {
           console.error('Failed to fetch image for tags', e);
@@ -282,8 +348,11 @@ export class CatalogController {
       return res.send(taggedBuffer);
     } catch (err) {
       console.error('Download error:', err);
-      return res.status(500).send({ error: 'Failed to process download' });
+      return res
+        .status(err instanceof HttpException ? err.getStatus() : 500)
+        .send({ error: 'Failed to process download' });
+    } finally {
+      activeDownloads--;
     }
   }
 }
-

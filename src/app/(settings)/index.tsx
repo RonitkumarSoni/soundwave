@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Alert, Platform, Modal, TextInput, ActivityIndicator } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -10,45 +10,55 @@ import { useSettingsStore } from '@/stores/useSettingsStore';
 import { usePlayerStore } from '@/stores/usePlayerStore';
 import { colors, spacing } from '@/theme/colors';
 import { api } from '@/lib/api';
+import { clearAccountStorage } from '@/lib/accountStorage';
+import { deleteDownload, cancelDownloads } from '@/services/downloadService';
+import Toast from 'react-native-toast-message';
+import { CustomDialog } from '@/components/CustomDialog';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const settings = useSettingsStore();
-  const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
+  const downloadedTracks = usePlayerStore(state => state.downloadedTracks);
   const [showEditProfile, setShowEditProfile] = React.useState(false);
   const [editName, setEditName] = React.useState(user?.display_name || '');
   const [updatingProfile, setUpdatingProfile] = React.useState(false);
+  const [dialogConfig, setDialogConfig] = React.useState<{ visible: boolean; title: string; message: string; confirmText?: string; isDestructive?: boolean; onConfirm: () => void } | null>(null);
 
-  useEffect(() => {
-    settings.loadFromStorage();
-  }, []);
 
   const handleLogout = () => {
-    if (Platform.OS === 'web') {
-      setShowLogoutConfirm(true);
-    } else {
-      Alert.alert('Log Out', 'Are you sure you want to log out?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Log Out', style: 'destructive', onPress: () => logout() },
-      ]);
-    }
+    setDialogConfig({
+      visible: true,
+      title: 'Log Out',
+      message: 'Are you sure you want to log out?',
+      confirmText: 'Log Out',
+      isDestructive: true,
+      onConfirm: () => logout()
+    });
   };
 
   const handleDeleteAccount = () => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('Are you sure you want to permanently delete your account? This action cannot be undone.')) {
-        api.auth.deleteAccount().then(() => logout());
+    setDialogConfig({
+      visible: true,
+      title: 'Delete Account',
+      message: 'Are you sure you want to permanently delete your account? This action cannot be undone.',
+      confirmText: 'Delete',
+      isDestructive: true,
+      onConfirm: async () => {
+        const uid = useAuthStore.getState().firebaseUser?.uid;
+        try {
+          await api.auth.deleteAccount();
+          cancelDownloads();
+          const downloads = usePlayerStore.getState().downloadedTracks;
+          await Promise.allSettled(downloads.map(deleteDownload));
+          await logout();
+          if (uid) await clearAccountStorage(uid);
+        } catch (error: any) {
+          Toast.show({ type: "error", text1: "Account deletion failed", text2: error?.response?.status === 401 ? "Sign out and sign in again, then retry deletion." : "Check your connection and retry." });
+        }
       }
-    } else {
-      Alert.alert('Delete Account', 'Are you sure you want to permanently delete your account? This action cannot be undone.', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => {
-          api.auth.deleteAccount().then(() => logout());
-        } },
-      ]);
-    }
+    });
   };
 
   const handleUpdateProfile = async () => {
@@ -60,7 +70,7 @@ export default function SettingsScreen() {
       setShowEditProfile(false);
     } catch (e) {
       console.error('Failed to update profile', e);
-      Alert.alert('Error', 'Failed to update profile');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to update profile' });
     } finally {
       setUpdatingProfile(false);
     }
@@ -78,6 +88,8 @@ export default function SettingsScreen() {
     onPress?: () => void,
     destructive?: boolean
   ) => {
+    const unsupported = ["Gapless Playback", "Crossfade", "Normalize Volume", "Push Notifications", "New Music Alerts", "Theme", "Language", "Car Mode"].includes(title);
+    if (unsupported) { subtitle = "Currently unavailable"; trailing = undefined; onPress = undefined; }
     const content = (
       <View style={styles.row}>
         <View style={[styles.iconContainer, destructive && { backgroundColor: 'rgba(255, 59, 48, 0.1)' }]}>
@@ -107,20 +119,20 @@ export default function SettingsScreen() {
         colors={["#170B2E", "#0A0514"]}
         style={StyleSheet.absoluteFill}
       />
-      
+
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
         <Text style={styles.headerTitle}>Settings</Text>
       </View>
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}>
-        
+
         {/* Profile Section */}
         {renderSectionHeader('Profile')}
         <View style={styles.card}>
           {renderRow(
-            'person-circle-outline', 
-            user?.display_name || 'User', 
-            user?.email, 
+            'person-circle-outline',
+            user?.display_name || 'User',
+            user?.email,
             <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
             () => {
               setEditName(user?.display_name || '');
@@ -129,9 +141,9 @@ export default function SettingsScreen() {
           )}
           <View style={styles.divider} />
           {renderRow(
-            'eye-outline', 
-            'View Public Profile', 
-            'See how others view your profile', 
+            'eye-outline',
+            'View Public Profile',
+            'See how others view your profile',
             <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
             () => {
               router.push('/profile');
@@ -142,30 +154,34 @@ export default function SettingsScreen() {
         {renderSectionHeader('Playback')}
         <View style={styles.card}>
           {renderRow(
-            'options-outline', 
-            'Audio Quality', 
+            'options-outline',
+            'Audio Quality',
             settings.audioQuality.toUpperCase(),
-            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
+            () => {
+              const choices = ["auto", "low", "normal", "high"] as const;
+              settings.updateSetting("audioQuality", choices[(choices.indexOf(settings.audioQuality) + 1) % choices.length]);
+            }
           )}
           <View style={styles.divider} />
           {renderRow(
-            'infinite-outline', 
-            'Gapless Playback', 
+            'infinite-outline',
+            'Gapless Playback',
             'Play consecutive tracks seamlessly',
-            <Switch 
-              value={settings.gaplessPlayback} 
+            <Switch
+              value={settings.gaplessPlayback}
               onValueChange={(v) => settings.updateSetting('gaplessPlayback', v)}
               trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
             />
           )}
           <View style={styles.divider} />
           {renderRow(
-            'swap-horizontal-outline', 
-            'Crossfade', 
+            'swap-horizontal-outline',
+            'Crossfade',
             `Duration: ${settings.crossfadeDuration}s`,
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Switch 
-                value={settings.crossfadeEnabled} 
+              <Switch
+                value={settings.crossfadeEnabled}
                 onValueChange={(v) => settings.updateSetting('crossfadeEnabled', v)}
                 trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
               />
@@ -179,11 +195,11 @@ export default function SettingsScreen() {
           )}
           <View style={styles.divider} />
           {renderRow(
-            'volume-high-outline', 
-            'Normalize Volume', 
+            'volume-high-outline',
+            'Normalize Volume',
             'Keep all songs at the same volume level',
-            <Switch 
-              value={settings.normalizeVolume} 
+            <Switch
+              value={settings.normalizeVolume}
               onValueChange={(v) => settings.updateSetting('normalizeVolume', v)}
               trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
             />
@@ -194,22 +210,22 @@ export default function SettingsScreen() {
         {renderSectionHeader('Notifications')}
         <View style={styles.card}>
           {renderRow(
-            'notifications-outline', 
-            'Push Notifications', 
+            'notifications-outline',
+            'Push Notifications',
             undefined,
-            <Switch 
-              value={settings.pushNotifications} 
+            <Switch
+              value={settings.pushNotifications}
               onValueChange={(v) => settings.updateSetting('pushNotifications', v)}
               trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
             />
           )}
           <View style={styles.divider} />
           {renderRow(
-            'musical-note-outline', 
-            'New Music Alerts', 
+            'musical-note-outline',
+            'New Music Alerts',
             'Get notified about new releases',
-            <Switch 
-              value={settings.newMusicAlerts} 
+            <Switch
+              value={settings.newMusicAlerts}
               onValueChange={(v) => settings.updateSetting('newMusicAlerts', v)}
               trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
             />
@@ -220,27 +236,27 @@ export default function SettingsScreen() {
         {renderSectionHeader('Downloads')}
         <View style={styles.card}>
           {renderRow(
-            'download-outline', 
-            'Download Quality', 
+            'download-outline',
+            'Download Quality',
             settings.downloadQuality === 'normal' ? 'Normal' : 'High',
             <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
             () => settings.updateSetting('downloadQuality', settings.downloadQuality === 'normal' ? 'high' : 'normal')
           )}
           <View style={styles.divider} />
           {renderRow(
-            'wifi-outline', 
-            'Download over Wi-Fi only', 
+            'wifi-outline',
+            'Download over Wi-Fi only',
             undefined,
-            <Switch 
-              value={settings.downloadWifiOnly} 
+            <Switch
+              value={settings.downloadWifiOnly}
               onValueChange={(v) => settings.updateSetting('downloadWifiOnly', v)}
               trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
             />
           )}
           <View style={styles.divider} />
           {renderRow(
-            'list-outline', 
-            'Manage Downloads', 
+            'list-outline',
+            'Manage Downloads',
             'View and manage your downloaded tracks',
             <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
             () => router.push('/downloads')
@@ -251,8 +267,8 @@ export default function SettingsScreen() {
         {renderSectionHeader('Preferences')}
         <View style={styles.card}>
           {renderRow(
-            'color-palette-outline', 
-            'Theme', 
+            'color-palette-outline',
+            'Theme',
             settings.theme.charAt(0).toUpperCase() + settings.theme.slice(1),
             <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
             () => {
@@ -263,8 +279,8 @@ export default function SettingsScreen() {
           )}
           <View style={styles.divider} />
           {renderRow(
-            'language-outline', 
-            'Language', 
+            'language-outline',
+            'Language',
             settings.language === 'en' ? 'English' : settings.language === 'hi' ? 'Hindi' : 'Auto',
             <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
             () => {
@@ -275,22 +291,22 @@ export default function SettingsScreen() {
           )}
           <View style={styles.divider} />
           {renderRow(
-            'videocam-outline', 
-            'Canvas', 
+            'videocam-outline',
+            'Canvas',
             'Display short looping visuals on tracks',
-            <Switch 
-              value={settings.canvasEnabled} 
+            <Switch
+              value={settings.canvasEnabled}
               onValueChange={(v) => settings.updateSetting('canvasEnabled', v)}
               trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
             />
           )}
           <View style={styles.divider} />
           {renderRow(
-            'car-outline', 
-            'Car Mode', 
+            'car-outline',
+            'Car Mode',
             'Simplified player UI for safe driving',
-            <Switch 
-              value={settings.carMode} 
+            <Switch
+              value={settings.carMode}
               onValueChange={(v) => settings.updateSetting('carMode', v)}
               trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
             />
@@ -301,11 +317,11 @@ export default function SettingsScreen() {
         {renderSectionHeader('Storage & Data')}
         <View style={styles.card}>
           {renderRow(
-            'cellular-outline', 
-            'Data Saver', 
+            'cellular-outline',
+            'Data Saver',
             'Sets audio quality to low and disables Canvas',
-            <Switch 
-              value={settings.dataSaver} 
+            <Switch
+              value={settings.dataSaver}
               onValueChange={(v) => {
                 settings.updateSetting('dataSaver', v);
                 if (v) {
@@ -318,32 +334,33 @@ export default function SettingsScreen() {
           )}
           <View style={styles.divider} />
           {renderRow(
-            'cloud-offline-outline', 
-            'Offline Mode', 
-            'Only show downloaded tracks, block network access',
-            <Switch 
-              value={settings.offlineMode} 
+            'cloud-offline-outline',
+            'Offline Mode',
+            'Play downloaded audio and show your offline library',
+            <Switch
+              value={settings.offlineMode}
               onValueChange={(v) => settings.updateSetting('offlineMode', v)}
               trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
             />
           )}
           <View style={styles.divider} />
           {renderRow(
-            'server-outline', 
-            'Clear Downloads', 
-            `${usePlayerStore(s => s.downloadedTracks).length * 5} MB used by downloaded tracks`,
+            'server-outline',
+            'Clear Downloads',
+            `${(downloadedTracks.reduce((bytes, track) => bytes + (track.fileSize || 0), 0) / (1024 * 1024)).toFixed(1)} MB used by downloaded tracks`,
             undefined,
             () => {
-              if (Platform.OS === 'web') {
-                if (window.confirm('Clear all downloaded tracks?')) {
-                  usePlayerStore.setState({ downloadedTracks: [] });
+              setDialogConfig({
+                visible: true,
+                title: 'Clear Downloads',
+                message: 'Remove all downloaded tracks from your device?',
+                confirmText: 'Clear',
+                isDestructive: true,
+                onConfirm: async () => {
+                  cancelDownloads();
+                  for (const track of [...usePlayerStore.getState().downloadedTracks]) await usePlayerStore.getState().toggleDownload(track);
                 }
-              } else {
-                Alert.alert('Clear Downloads', 'Remove all downloaded tracks from your device?', [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Clear', style: 'destructive', onPress: () => usePlayerStore.setState({ downloadedTracks: [] }) },
-                ]);
-              }
+              });
             }
           )}
         </View>
@@ -352,26 +369,26 @@ export default function SettingsScreen() {
         {renderSectionHeader('About')}
         <View style={styles.card}>
           {renderRow(
-            'information-circle-outline', 
-            'About Soundwave', 
-            'Version 1.0.0', 
-            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />, 
+            'information-circle-outline',
+            'About Soundwave',
+            'Version 1.0.0',
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
             () => router.push('/(settings)/about')
           )}
           <View style={styles.divider} />
           {renderRow(
-            'shield-checkmark-outline', 
-            'Privacy Policy', 
-            undefined, 
-            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />, 
+            'shield-checkmark-outline',
+            'Privacy Policy',
+            undefined,
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
             () => router.push('/(settings)/privacy')
           )}
           <View style={styles.divider} />
           {renderRow(
-            'document-text-outline', 
-            'Terms & Conditions', 
-            undefined, 
-            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />, 
+            'document-text-outline',
+            'Terms & Conditions',
+            undefined,
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
             () => router.push('/(settings)/terms')
           )}
         </View>
@@ -380,42 +397,39 @@ export default function SettingsScreen() {
         {renderSectionHeader('Account')}
         <View style={styles.card}>
           {renderRow(
-            'log-out-outline', 
-            'Log Out', 
-            undefined, 
-            undefined, 
-            handleLogout, 
+            'log-out-outline',
+            'Log Out',
+            undefined,
+            undefined,
+            handleLogout,
             true
           )}
           <View style={styles.divider} />
           {renderRow(
-            'trash-outline', 
-            'Delete Account', 
-            'Permanently delete your account', 
-            undefined, 
-            handleDeleteAccount, 
+            'trash-outline',
+            'Delete Account',
+            'Permanently delete your account',
+            undefined,
+            handleDeleteAccount,
             true
           )}
         </View>
       </ScrollView>
 
-      {/* Custom Logout Confirm Modal for Web */}
-      {Platform.OS === 'web' && showLogoutConfirm && (
-        <View style={[StyleSheet.absoluteFill, { zIndex: 9999, justifyContent: 'center', alignItems: 'center' }]}>
-          <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
-          <View style={styles.alertBox}>
-            <Text style={styles.alertTitle}>Log Out</Text>
-            <Text style={styles.alertMessage}>Are you sure you want to log out?</Text>
-            <View style={styles.alertButtons}>
-              <TouchableOpacity style={styles.alertButtonCancel} onPress={() => setShowLogoutConfirm(false)}>
-                <Text style={styles.alertButtonTextCancel}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.alertButtonConfirm} onPress={() => { setShowLogoutConfirm(false); logout(); }}>
-                <Text style={styles.alertButtonTextConfirm}>Log Out</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+      {/* Custom Dialog Modal */}
+      {dialogConfig && (
+        <CustomDialog
+          visible={dialogConfig.visible}
+          title={dialogConfig.title}
+          message={dialogConfig.message}
+          confirmText={dialogConfig.confirmText}
+          isDestructive={dialogConfig.isDestructive}
+          onCancel={() => setDialogConfig(null)}
+          onConfirm={() => {
+            setDialogConfig(null);
+            dialogConfig.onConfirm();
+          }}
+        />
       )}
 
       {/* Edit Profile Modal */}
@@ -432,15 +446,15 @@ export default function SettingsScreen() {
               autoFocus
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity 
-                style={[styles.modalBtn, { backgroundColor: 'transparent' }]} 
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: 'transparent' }]}
                 onPress={() => setShowEditProfile(false)}
                 disabled={updatingProfile}
               >
                 <Text style={[styles.modalBtnText, { color: 'rgba(255,255,255,0.6)' }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.modalBtn} 
+              <TouchableOpacity
+                style={styles.modalBtn}
                 onPress={handleUpdateProfile}
                 disabled={updatingProfile || !editName.trim()}
               >

@@ -1,11 +1,14 @@
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
-import { FlatList, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Switch, Share } from 'react-native';
+import { FlatList, View, Text, StyleSheet, TouchableOpacity, Switch, Share } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '@/lib/api';
+import { LoadError } from '@/components/LoadError';
+import { sameTrack } from '@/lib/tracks';
+import Toast from 'react-native-toast-message';
 import { colors, gradients, spacing, borderRadius } from '@/theme/colors';
 import { TrackRow } from '@/components/TrackRow';
 import { PlaylistHeaderSkeleton, TrackRowSkeleton } from '@/components/Skeletons';
@@ -17,34 +20,30 @@ export default function PlaylistDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
+
   const [playlist, setPlaylist] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [isCollaborative, setIsCollaborative] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const bottomPadding = useBottomPadding();
   const downloadTracks = usePlayerStore((s) => s.downloadTracks);
   const downloadedTracks = usePlayerStore((s) => s.downloadedTracks);
-  
-  const allDownloaded = playlist?.tracks?.length > 0 && 
-    playlist.tracks.every((t: Track) => downloadedTracks.some(dt => dt.id === t.id));
+
+  const allDownloaded = playlist?.tracks?.length > 0 &&
+    playlist.tracks.every((t: Track) => downloadedTracks.some(dt => sameTrack(dt, t)));
 
   useEffect(() => {
-    loadPlaylistData();
-  }, [id]);
+    let cancelled = false;
+    setLoading(true); setLoadError(false); setPlaylist(null);
+    void api.playlists.getById(String(id)).then(data => { if (!cancelled) setPlaylist(data); })
+      .catch(() => { if (!cancelled) setLoadError(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [id, attempt]);
 
-  const loadPlaylistData = async () => {
-    setLoading(true);
-    try {
-      const data = await api.playlists.getById(id as string);
-      setPlaylist(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (loadError) return <LoadError title="Playlist could not load" onRetry={() => setAttempt(value => value + 1)} />;
 
-  const handleChangeCover = () => {
+  const handleChangeCover = async () => {
     const mockImages = [
       'https://images.unsplash.com/photo-1493225457124-a1a2a5f08db3?w=300&q=80',
       'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&q=80',
@@ -52,7 +51,10 @@ export default function PlaylistDetailScreen() {
       'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=300&q=80'
     ];
     const randomImg = mockImages[Math.floor(Math.random() * mockImages.length)];
-    setPlaylist({ ...playlist, cover_url: randomImg });
+    try {
+      await api.playlists.update(String(id), undefined, randomImg);
+      setPlaylist((current: any) => current ? { ...current, cover_url: randomImg } : current);
+    } catch { Toast.show({ type: "error", text1: "Cover could not save", text2: "Please retry." }); }
   };
 
   const renderHeader = () => (
@@ -61,7 +63,7 @@ export default function PlaylistDetailScreen() {
         colors={[gradients.background[0], gradients.background[1]]}
         style={StyleSheet.absoluteFill}
       />
-      
+
       <View style={[styles.headerActions, { top: insets.top + spacing.md }]}>
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={24} color="#FFF" />
@@ -79,14 +81,14 @@ export default function PlaylistDetailScreen() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity 
-        activeOpacity={0.8} 
-        onPress={handleChangeCover} 
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={handleChangeCover}
         style={[styles.albumCoverContainer, { marginTop: insets.top + 60 }]}
       >
-        <Image 
-          source={{ uri: playlist?.cover_url || 'https://via.placeholder.com/300' }} 
-          style={styles.albumImage} 
+        <Image
+          source={{ uri: playlist?.cover_url || 'https://via.placeholder.com/300' }}
+          style={styles.albumImage}
         />
         <View style={{ position: 'absolute', bottom: -10, right: -10, backgroundColor: colors.accentSolid, padding: 8, borderRadius: 20 }}>
           <Feather name="edit-2" size={16} color="#FFF" />
@@ -102,17 +104,16 @@ export default function PlaylistDetailScreen() {
 
       <View style={styles.collabContainer}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-          <Text style={styles.collabText}>Collaborative</Text>
-          <Switch 
-            value={isCollaborative} 
-            onValueChange={setIsCollaborative}
+          <Text style={styles.collabText}>Collaboration unavailable</Text>
+          <Switch
+            value={false} disabled
             trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
           />
         </View>
-        
+
         <View style={{ width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.2)' }} />
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
           activeOpacity={0.7}
           onPress={() => {

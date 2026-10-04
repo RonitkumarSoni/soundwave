@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
-import { BlurView } from 'expo-blur';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import { colors, gradients, spacing } from '@/theme/colors';
+import { colors, gradients } from '@/theme/colors';
 import { PasswordStrengthBar } from '@/components/PasswordStrengthBar';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification, fetchSignInMethodsForEmail } from 'firebase/auth';
-import { api } from '@/lib/api';
+
 import { useAuthStore } from '@/stores/useAuthStore';
 
 type Step = 'email' | 'password' | 'profile';
@@ -16,21 +16,17 @@ type Step = 'email' | 'password' | 'profile';
 export default function SignupScreen() {
   const router = useRouter();
   const setAuthData = useAuthStore((s) => s.setAuthData);
-  
+
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '' });
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const showError = (title: string, message: string) => {
-    if (Platform.OS === 'web') {
-      setAlertConfig({ visible: true, title, message });
-    } else {
-      Alert.alert(title, message);
-    }
+    setErrorMsg(message);
   };
 
   const handleNextFromEmail = async () => {
@@ -40,7 +36,7 @@ export default function SignupScreen() {
       showError('Invalid Email', 'Please enter a valid email address.');
       return;
     }
-    
+
     try {
       setIsLoading(true);
       try {
@@ -50,7 +46,7 @@ export default function SignupScreen() {
           setIsLoading(false);
           return;
         }
-      } catch (e) {
+      } catch  {
         // If email enumeration protection is enabled in Firebase, proceed gracefully
       }
       setStep('password');
@@ -62,7 +58,7 @@ export default function SignupScreen() {
   const handleNextFromPassword = () => {
     const hasMinLength = password.length >= 8;
     const hasLetterAndNumber = /(?=.*[a-zA-Z])(?=.*[0-9])/.test(password);
-    
+
     if (!hasMinLength || !hasLetterAndNumber) {
       showError('Weak Password', 'Please ensure your password meets all requirements.');
       return;
@@ -79,28 +75,30 @@ export default function SignupScreen() {
     try {
       setIsLoading(true);
       const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      
+
       if (userCredential.user) {
         await updateProfile(userCredential.user, { displayName: displayName.trim() });
-        try {
-          await sendEmailVerification(userCredential.user);
-        } catch (e) {
-          console.warn("Email verification send warning:", e);
-        }
-      }
 
-      const firebaseIdToken = await userCredential.user.getIdToken();
-      const data = await api.auth.firebaseLogin(firebaseIdToken);
-      await setAuthData(data);
-      
-      router.replace('/(auth)/verify-email');
+        // Pure Firebase Auth Flow: Bypass backend JWT exchange.
+        const userProfile = {
+          id: userCredential.user.uid,
+          email: userCredential.user.email || '',
+          display_name: displayName.trim(),
+          avatar_url: userCredential.user.photoURL || '',
+          is_premium: false,
+          oauth_provider: null,
+        };
+
+        await sendEmailVerification(userCredential.user);
+        await setAuthData(userProfile, userCredential.user);
+        Keyboard.dismiss();
+        router.replace('/(auth)/verify-email');
+      }
     } catch (err: any) {
       let errorMsg = 'Unable to create account right now. Please try again later.';
       if (err.code === 'auth/email-already-in-use') {
         errorMsg = 'An account with this email already exists. Please log in instead.';
         setStep('email');
-      } else if (err.message) {
-        errorMsg = err.message;
       }
       showError('Sign Up Failed', errorMsg);
     } finally {
@@ -109,22 +107,24 @@ export default function SignupScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <LinearGradient colors={[gradients.background[0], gradients.background[1], gradients.background[2]]} style={StyleSheet.absoluteFill} />
-      
+
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={() => {
+            setErrorMsg(null);
             if (step === 'profile') setStep('password');
             else if (step === 'password') setStep('email');
             else {
               if (router.canGoBack()) {
                 router.back();
               } else {
+                Keyboard.dismiss();
                 router.replace('/(auth)/welcome');
               }
             }
@@ -145,20 +145,24 @@ export default function SignupScreen() {
         {step === 'email' && (
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>What's your email?</Text>
-            <View style={styles.inputContainer}>
-              <TextInput
+            <View style={[styles.inputContainer, errorMsg ? styles.inputErrorBorder : null]}>
+              <TextInput autoComplete="off" importantForAutofill="noExcludeDescendants" textContentType="none"
                 style={styles.input}
-                autoFocus
                 placeholder="Enter your email"
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => { setEmail(text); setErrorMsg(null); }}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
             </View>
-            <Text style={styles.helperText}>You'll need to confirm this email later.</Text>
-            
+
+            {errorMsg ? (
+              <Text style={styles.errorTextSimple}>{errorMsg}</Text>
+            ) : (
+              <Text style={styles.helperText}>You'll need to confirm this email later.</Text>
+            )}
+
             <TouchableOpacity style={styles.nextButton} onPress={handleNextFromEmail} disabled={isLoading}>
               <LinearGradient
                 colors={[gradients.primary[0], gradients.primary[1]]}
@@ -181,21 +185,24 @@ export default function SignupScreen() {
         {step === 'password' && (
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Create a password</Text>
-            <View style={styles.inputContainer}>
-              <TextInput
+            <View style={[styles.inputContainer, errorMsg ? styles.inputErrorBorder : null]}>
+              <TextInput autoComplete="off" importantForAutofill="noExcludeDescendants" textContentType="none"
                 style={styles.input}
-                autoFocus
                 placeholder="Enter password"
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => { setPassword(text); setErrorMsg(null); }}
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={24} color="rgba(255,255,255,0.7)" />
               </TouchableOpacity>
             </View>
-            
+
+            {errorMsg ? (
+              <Text style={styles.errorTextSimple}>{errorMsg}</Text>
+            ) : null}
+
             <PasswordStrengthBar password={password} />
 
             <TouchableOpacity style={styles.nextButton} onPress={handleNextFromPassword}>
@@ -213,24 +220,28 @@ export default function SignupScreen() {
         {step === 'profile' && (
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>What's your name?</Text>
-            <View style={styles.inputContainer}>
-              <TextInput
+            <View style={[styles.inputContainer, errorMsg ? styles.inputErrorBorder : null]}>
+              <TextInput autoComplete="off" importantForAutofill="noExcludeDescendants" textContentType="none"
                 style={styles.input}
-                autoFocus
                 placeholder="Display name"
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 value={displayName}
-                onChangeText={setDisplayName}
+                onChangeText={(text) => { setDisplayName(text); setErrorMsg(null); }}
               />
             </View>
-            <Text style={styles.helperText}>This appears on your profile.</Text>
+
+            {errorMsg ? (
+              <Text style={styles.errorTextSimple}>{errorMsg}</Text>
+            ) : (
+              <Text style={styles.helperText}>This appears on your profile.</Text>
+            )}
 
             <View style={styles.termsContainer}>
               <Text style={styles.termsText}>
                 By tapping "Create account", you agree to the Soundwave Terms of Service and Privacy Policy.
               </Text>
             </View>
-            
+
             <TouchableOpacity style={styles.nextButton} onPress={handleSignup} disabled={isLoading}>
               <LinearGradient
                 colors={[gradients.primary[0], gradients.primary[1]]}
@@ -244,18 +255,6 @@ export default function SignupScreen() {
         )}
       </View>
 
-      {Platform.OS === 'web' && alertConfig.visible && (
-        <View style={[StyleSheet.absoluteFill, { zIndex: 9999, justifyContent: 'center', alignItems: 'center' }]}>
-          <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
-          <View style={styles.alertBox}>
-            <Text style={styles.alertTitle}>{alertConfig.title}</Text>
-            <Text style={styles.alertMessage}>{alertConfig.message}</Text>
-            <TouchableOpacity style={styles.alertButton} onPress={() => setAlertConfig({ ...alertConfig, visible: false })}>
-              <Text style={styles.alertButtonText}>OK</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
     </KeyboardAvoidingView>
   );
 }
@@ -301,6 +300,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingBottom: 40,
   },
   stepContainer: {
     flex: 1,
@@ -371,38 +371,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  alertBox: {
-    backgroundColor: 'rgba(30, 30, 30, 0.95)',
-    borderRadius: 20,
-    padding: 24,
-    width: '80%',
-    maxWidth: 340,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+  inputErrorBorder: {
+    borderColor: '#D32F2F',
   },
-  alertTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFF',
-    marginBottom: 12,
-  },
-  alertMessage: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
+  errorTextSimple: {
+    color: '#D32F2F',
+    fontSize: 14,
     marginBottom: 24,
-  },
-  alertButton: {
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-  },
-  alertButtonText: {
-    color: '#FFF',
-    fontWeight: '600',
-    fontSize: 15,
+    marginTop: -4,
   },
 });

@@ -1,31 +1,58 @@
+import 'react-native-gesture-handler';
 import React, { useState, useCallback } from "react";
-import { View, Text, ActivityIndicator, StyleSheet, Platform } from "react-native";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, StyleSheet, Platform, Keyboard } from "react-native";
+import { api } from '@/lib/api';
 import { Stack, useRouter, useSegments } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { Audio } from "expo-av";
+import * as SplashScreen from 'expo-splash-screen';
+import * as Linking from 'expo-linking';
+import { AnimatedSplashScreen } from "@/components/AnimatedSplashScreen";
+
+
 import { BottomNav } from "@/components/BottomNav";
-import { Ionicons } from "@expo/vector-icons";
+
 import { MiniPlayer } from "@/components/MiniPlayer";
 import { useAudioPlayer } from "@/hooks/useAudioPlayer";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { usePlayerStore } from "@/stores/usePlayerStore";
 
+import { registerPlayback } from "@/services/playbackService";
+import { auth } from "@/lib/firebase";
+import { onIdTokenChanged } from "firebase/auth";
+import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
+import { colors } from "@/theme/colors";
+import { authRedirect } from "@/lib/authRoute";
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+registerPlayback();
+
 export default function RootLayout() {
+  const insets = useSafeAreaInsets();
   // Initialize audio player
   useAudioPlayer();
   const router = useRouter();
   const segments = useSegments();
+  React.useEffect(() => { Keyboard.dismiss(); }, [segments]);
+  const [pendingPlay, setPendingPlay] = useState<{ id: string; source: string } | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+  const [isAnimationComplete, setIsAnimationComplete] = useState(false);
+  const finishSplash = useCallback(() => setIsAnimationComplete(true), []);
+  const showCustomSplash = useCallback(() => { void SplashScreen.hideAsync().catch(() => {}); }, []);
 
-  const { isLoggedIn, isLoading, loadFromStorage: loadAuthFromStorage } = useAuthStore();
-  const { hasSeenOnboarding, loadFromStorage: loadSettingsFromStorage } = useSettingsStore();
-  const initLikedTracks = usePlayerStore((s) => s.initLikedTracks);
-  const initDownloadedTracks = usePlayerStore((s) => s.initDownloadedTracks);
-  const initFollowedAndSaved = usePlayerStore((s) => s.initFollowedAndSaved);
-  const initCustomPlaylists = usePlayerStore((s) => s.initCustomPlaylists);
+  const { isLoggedIn, isLoading, emailVerified, profileError, syncUser } = useAuthStore();
+  const { hasSeenOnboarding } = useSettingsStore();
+
+
+
+
   const togglePlay = usePlayerStore((s) => s.togglePlay);
+
+  React.useEffect(() => {
+    if (profileError) Toast.show({ type: "error", text1: "Couldn't refresh your account", text2: "Please try again shortly." });
+  }, [profileError]);
 
   // Keyboard shortcuts (web only)
   React.useEffect(() => {
@@ -46,88 +73,67 @@ export default function RootLayout() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePlay]);
 
-  React.useEffect(() => {
-    // Configure audio to play in background
-    const configureAudio = async () => {
-      try {
-        await Audio.setAudioModeAsync({
-          staysActiveInBackground: true,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
-        });
-      } catch (e) {
-        console.warn("Failed to set audio mode", e);
-      }
-    };
-    configureAudio();
-    
-    loadSettingsFromStorage();
-    initLikedTracks();
-    initDownloadedTracks();
-    initFollowedAndSaved();
-    initCustomPlaylists();
-  }, []);
 
   React.useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      const playId = url.searchParams.get('play');
-      if (playId) {
-        AsyncStorage.setItem('pending_play_id', playId);
-      }
-    }
-    loadAuthFromStorage();
-  }, [loadAuthFromStorage]);
+    const unsubscribe = onIdTokenChanged(auth, firebaseUser => {
+      void syncUser(firebaseUser).catch(error => { console.error('Account restore failed', error); });
+    });
+    return unsubscribe;
+  }, [syncUser]);
 
   // Deep Linking Handler
   React.useEffect(() => {
-    const Linking = require('expo-linking');
     const handleDeepLink = async (url: string | null) => {
       if (!url) return;
       try {
         const parsedUrl = Linking.parse(url);
         // Example: soundwave://play?id=123&type=track
-        if (parsedUrl.queryParams?.id) {
-          const id = parsedUrl.queryParams.id as string;
-          // Here we would fetch track details from API and play it
-          // For now we log it since we need full track object to play
-          console.log("Deep link request to play:", id);
+        const playId = parsedUrl.queryParams?.play || parsedUrl.queryParams?.id;
+        if (typeof playId === "string") {
+          setPendingPlay({ id: playId, source: typeof parsedUrl.queryParams?.source === "string" ? parsedUrl.queryParams.source : "jiosaavn" });
         }
       } catch (e) {
         console.error("Failed to parse deep link", e);
       }
     };
 
-    Linking.getInitialURL().then(handleDeepLink);
+    if (Platform.OS === "web" && typeof window !== "undefined") void handleDeepLink(window.location.href);
+    else Linking.getInitialURL().then(handleDeepLink);
     const subscription = Linking.addEventListener('url', ({ url }: any) => handleDeepLink(url));
-    
+
     return () => {
       subscription.remove();
     };
   }, []);
 
   React.useEffect(() => {
+    if (!pendingPlay || isLoading || !isLoggedIn || !emailVerified) return;
+    let cancelled = false;
+    void api.getTrackById(pendingPlay.id, pendingPlay.source).then(track => {
+      if (cancelled) return;
+      if (!track) throw new Error("Track unavailable");
+      usePlayerStore.getState().setQueue([track]);
+      usePlayerStore.getState().setTrack(track);
+      setPendingPlay(null);
+    }).catch(() => {
+      if (cancelled) return;
+      Toast.show({ type: "error", text1: "Shared song unavailable" });
+      setPendingPlay(null);
+    });
+    return () => { cancelled = true; };
+  }, [pendingPlay, isLoading, isLoggedIn, emailVerified]);
+
+  React.useEffect(() => {
     if (isLoading) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
-    const inOnboarding = segments[0] === 'onboarding';
-    
-    if (!isLoggedIn && !inAuthGroup) {
-      // Redirect to welcome if not logged in
-      router.replace('/(auth)/welcome');
-    } else if (isLoggedIn && inAuthGroup) {
-      // Redirect to home if logged in but trying to access auth screens
-      router.replace('/(home)');
-    } else if (isLoggedIn && !hasSeenOnboarding && !inOnboarding) {
-      // Show onboarding for first-time users
-      router.replace('/onboarding');
-    }
-  }, [isLoggedIn, isLoading, segments, hasSeenOnboarding]);
+    const destination = authRedirect({ isLoggedIn, emailVerified, hasSeenOnboarding }, segments);
+    if (destination) router.replace(destination as Parameters<typeof router.replace>[0]);
+  }, [isLoggedIn, isLoading, emailVerified, segments, hasSeenOnboarding, isAnimationComplete, router]);
 
-  // Detect if we're on the Now Playing or Onboarding screen
+  // Detect if we're on the Now Playing, Onboarding, or Auth screens
   const isNowPlaying = segments.includes("player" as never);
   const isOnboarding = segments.includes("onboarding" as never);
+  const isAuth = segments[0] === '(auth)';
 
   const handleTabChange = useCallback(
     (index: number) => {
@@ -160,14 +166,17 @@ export default function RootLayout() {
   }, [segments]);
 
 
-  if (isLoading) {
-    return <View style={styles.container} />;
-  }
+  React.useEffect(() => {
+    if (!isLoading) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [isLoading]);
+
 
   const globalCss = `
     input:-webkit-autofill,
-    input:-webkit-autofill:hover, 
-    input:-webkit-autofill:focus, 
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus,
     input:-webkit-autofill:active {
       transition: background-color 5000s ease-in-out 0s;
       -webkit-text-fill-color: #fff !important;
@@ -177,7 +186,7 @@ export default function RootLayout() {
   return (
     <View style={styles.container}>
       {Platform.OS === 'web' && <style dangerouslySetInnerHTML={{ __html: globalCss }} />}
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <StatusBar style="light" />
       <Stack
         screenOptions={{
           headerShown: false,
@@ -197,13 +206,51 @@ export default function RootLayout() {
         />
       </Stack>
 
-      {/* Custom floating UI — hidden during Now Playing or Onboarding */}
-      {!isNowPlaying && !isOnboarding && (
+      {/* Custom floating UI — hidden during Now Playing, Onboarding, or Auth */}
+      {!isNowPlaying && !isOnboarding && !isAuth && (
         <>
           <MiniPlayer />
           <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
         </>
       )}
+
+      {(isLoading || !isAnimationComplete) && (
+        <View style={[StyleSheet.absoluteFillObject, { zIndex: 100 }]}>
+          <AnimatedSplashScreen
+            ready={!isLoading && authRedirect({ isLoggedIn, emailVerified, hasSeenOnboarding }, segments) === null}
+            onFinish={finishSplash}
+            onLayout={showCustomSplash}
+            onRetry={() => { void syncUser(auth.currentUser).catch(error => { console.error('Account restore failed', error); }); }}
+          />
+        </View>
+      )}
+      <View pointerEvents="none" style={{position:"absolute",top:0,left:0,right:0,height:insets.top,backgroundColor:"#170B2E",zIndex:110}} />
+      {/* Global Toast Notification */}
+      <Toast
+        position="bottom"
+        bottomOffset={insets.bottom + 170}
+        visibilityTime={2500}
+        config={{
+          success: (props) => (
+            <BaseToast
+              {...props}
+              style={{ borderLeftColor: colors.accentSolid, backgroundColor: '#1E1432' }}
+              contentContainerStyle={{ paddingHorizontal: 15 }}
+              text1Style={{ fontSize: 16, fontWeight: '700', color: '#FFF' }}
+              text2Style={{ fontSize: 13, color: '#B9A9D9' }}
+            />
+          ),
+          error: (props) => (
+            <ErrorToast
+              {...props}
+              style={{ borderLeftColor: colors.danger, backgroundColor: '#1E1432' }}
+              contentContainerStyle={{ paddingHorizontal: 15 }}
+              text1Style={{ fontSize: 16, fontWeight: '700', color: '#FFF' }}
+              text2Style={{ fontSize: 13, color: '#B9A9D9' }}
+            />
+          ),
+        }}
+      />
     </View>
   );
 }

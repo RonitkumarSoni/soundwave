@@ -49,7 +49,7 @@ export default function OnboardingScreen() {
   const handleFinish = async () => {
     setIsSaving(true);
     // In a real app, save these preferences to the backend
-    await new Promise(r => setTimeout(r, 1000)); 
+    await new Promise(r => setTimeout(r, 1000));
     updateSetting('hasSeenOnboarding', true);
     setIsSaving(false);
     router.replace('/(home)');
@@ -65,7 +65,7 @@ export default function OnboardingScreen() {
         <Text style={styles.title}>Choose 3 or more artists you like.</Text>
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -96,7 +96,7 @@ export default function OnboardingScreen() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom || 24 }]}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.doneButton, isReady ? styles.doneButtonActive : null]}
           onPress={handleFinish}
           disabled={!isReady || isSaving}

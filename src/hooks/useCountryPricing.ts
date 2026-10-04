@@ -26,7 +26,7 @@ export const useCountryPricing = () => {
         const { data } = await axios.get("https://get.geojs.io/v1/ip/geo.json");
         const code = data.country_code;
         const name = data.country;
-        
+
         if (code === "IN") {
           setInfo({
             countryCode: code,
@@ -46,12 +46,12 @@ export const useCountryPricing = () => {
             isLoading: false,
           });
         }
-      } catch (error) {
+      } catch  {
         // Fallback to IN if offline
         setInfo(prev => ({ ...prev, isLoading: false }));
       }
     };
-    
+
     fetchCountry();
   }, []);
 

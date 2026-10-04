@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 import { colors, spacing, borderRadius } from '@/theme/colors';
 import { Track, usePlayerStore, CustomPlaylist } from '@/stores/usePlayerStore';
 
@@ -15,32 +16,32 @@ export function AddToPlaylistModal({ visible, onClose, track }: AddToPlaylistMod
   const customPlaylists = usePlayerStore((s) => s.customPlaylists);
   const createPlaylist = usePlayerStore((s) => s.createPlaylist);
   const addTrackToPlaylist = usePlayerStore((s) => s.addTrackToPlaylist);
-  
+
   const [isCreating, setIsCreating] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
 
   const handleAddTrack = (playlist: CustomPlaylist) => {
     if (track) {
       addTrackToPlaylist(playlist.id, track);
-      Alert.alert('Added', `Added to ${playlist.name}`);
+      Toast.show({ type: 'success', text1: 'Added', text2: `Added to ${playlist.name}` });
       onClose();
     }
   };
 
   const handleCreateAndAdd = () => {
     if (!newPlaylistName.trim()) {
-      Alert.alert('Error', 'Please enter a playlist name.');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter a playlist name.' });
       return;
     }
-    
+
     createPlaylist(newPlaylistName.trim(), '');
-    
+
     setTimeout(() => {
       const updatedPlaylists = usePlayerStore.getState().customPlaylists;
       const created = updatedPlaylists.find(p => p.name === newPlaylistName.trim());
       if (created && track) {
         addTrackToPlaylist(created.id, track);
-        Alert.alert('Success', `Playlist created and track added!`);
+        Toast.show({ type: 'success', text1: 'Success', text2: 'Playlist created and track added!' });
         setNewPlaylistName('');
         setIsCreating(false);
         onClose();
@@ -49,7 +50,7 @@ export function AddToPlaylistModal({ visible, onClose, track }: AddToPlaylistMod
   };
 
   const renderItem = ({ item }: { item: CustomPlaylist }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.playlistItem}
       onPress={() => handleAddTrack(item)}
     >
@@ -71,7 +72,7 @@ export function AddToPlaylistModal({ visible, onClose, track }: AddToPlaylistMod
       animationType="slide"
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
@@ -95,14 +96,14 @@ export function AddToPlaylistModal({ visible, onClose, track }: AddToPlaylistMod
                 autoFocus
               />
               <View style={styles.createActions}>
-                <TouchableOpacity 
-                  style={[styles.btn, styles.btnCancel]} 
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnCancel]}
                   onPress={() => setIsCreating(false)}
                 >
                   <Text style={styles.btnText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.btn, styles.btnSave]} 
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnSave]}
                   onPress={handleCreateAndAdd}
                 >
                   <Text style={[styles.btnText, { color: '#FFF' }]}>Create & Add</Text>
@@ -111,7 +112,7 @@ export function AddToPlaylistModal({ visible, onClose, track }: AddToPlaylistMod
             </View>
           ) : (
             <>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.createNewBtn}
                 onPress={() => setIsCreating(true)}
               >

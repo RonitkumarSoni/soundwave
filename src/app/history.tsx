@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayerStore } from '@/stores/usePlayerStore';
-import { colors, gradients, spacing } from '@/theme/colors';
+import { gradients, spacing } from '@/theme/colors';
 import { TrackRow } from '@/components/TrackRow';
 
 export default function HistoryScreen() {
@@ -19,7 +19,7 @@ export default function HistoryScreen() {
         colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
         style={StyleSheet.absoluteFill}
       />
-      
+
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={24} color="#FFF" />

@@ -33,7 +33,7 @@ export const currentUser = {
   avatarUrl: "https://i.pravatar.cc/150?img=47",
 };
 
-const coverBase = "https://picsum.photos/seed";
+
 
 export const popularTracks: Track[] = [
   {

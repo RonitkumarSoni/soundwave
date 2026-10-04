@@ -1,19 +1,9 @@
 import React from "react";
-import {
-  View,
-  Pressable,
-  StyleSheet,
-  Dimensions,
-  Platform,
-} from "react-native";
+import { View, Pressable, StyleSheet, Platform } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import Animated, {
-  useAnimatedStyle,
-  withSpring,
-  useSharedValue,
-} from "react-native-reanimated";
+import Animated, { useAnimatedStyle, withSpring, useSharedValue } from "react-native-reanimated";
 import { colors, gradients } from "@/theme/colors";
 
 interface BottomNavProps {
@@ -63,7 +53,7 @@ function TabItem({ tab, isActive, onPress }: TabItemProps) {
       damping: 15,
       stiffness: 150,
     });
-  }, [isActive]);
+  }, [isActive, fabScale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     // No translateY to prevent clipping at the top
@@ -157,7 +147,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   fabContainer: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
   },

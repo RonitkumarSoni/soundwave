@@ -1,20 +1,6 @@
-import React, { useRef, useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  FlatList,
-  Image,
-  Platform,
-  Modal,
-  ScrollView,
-  Share,
-  TextInput,
-  ActivityIndicator,
-  PanResponder,
-} from "react-native";
+
+import React, { useRef, useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, Platform, Modal, ScrollView, PanResponder } from "react-native";
 import { Video, ResizeMode } from "expo-av";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -23,15 +9,9 @@ import { IOSLoader } from "@/components/IOSLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-  withRepeat,
-} from "react-native-reanimated";
-import { colors, gradients, spacing, borderRadius } from "@/theme/colors";
-import { Waveform } from "@/components/Waveform";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming, withRepeat } from "react-native-reanimated";
+import { colors, spacing } from "@/theme/colors";
+import { SeekBar } from "@/components/SeekBar";
 import { usePlayerStore } from "@/stores/usePlayerStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { seekGlobalAudio } from "@/hooks/useAudioPlayer";
@@ -46,7 +26,7 @@ const getAppWidth = () => {
 export default function NowPlayingScreen() {
   const APP_WIDTH = getAppWidth();
   const SCREEN_HEIGHT = Dimensions.get("window").height;
-  
+
   // Make covers adapt to screen height so they don't cause overflow on short screens,
   // but keep a generous minimum size (250) so they don't look tiny.
   const availableHeight = SCREEN_HEIGHT - (Platform.OS === 'web' ? 380 : 380);
@@ -65,7 +45,7 @@ export default function NowPlayingScreen() {
     "https://assets.mixkit.co/videos/preview/mixkit-ink-swirling-in-water-in-slow-motion-1188-large.mp4",
     "https://assets.mixkit.co/videos/preview/mixkit-starry-night-sky-with-falling-stars-14811-large.mp4"
   ];
-  
+
   const getCanvasForTrack = (trackId: string) => {
     // Generate a consistent index based on the track ID so the same song always gets the same video
     const sum = trackId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -78,12 +58,13 @@ export default function NowPlayingScreen() {
     } else {
       bgScale.value = withTiming(1);
     }
-  }, [canvasEnabled]);
+  }, [canvasEnabled, bgScale]);
 
   const bgAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: bgScale.value }]
   }));
 
+  const audioError = usePlayerStore((s) => s.audioError);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const likedTracks = usePlayerStore((s) => s.likedTracks);
@@ -93,13 +74,13 @@ export default function NowPlayingScreen() {
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const toggleLike = usePlayerStore((s) => s.toggleLike);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
-  const toggleRepeat = usePlayerStore((s) => s.repeatMode);
+  const toggleRepeat = usePlayerStore((s) => s.toggleRepeat);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
   const prevTrack = usePlayerStore((s) => s.prevTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
   const queue = usePlayerStore((s) => s.queue);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
-  
+
   const moveQueueItem = (fromIndex: number, toIndex: number) => {
     if (toIndex < 0 || toIndex >= queue.length) return;
     const newQueue = [...queue];
@@ -176,7 +157,7 @@ export default function NowPlayingScreen() {
       } else {
         setPlainLyrics("Lyrics not found for this track. Please try another song.");
       }
-    } catch (e) {
+    } catch  {
       setPlainLyrics("Failed to load lyrics.");
     } finally {
       setIsLoadingLyrics(false);
@@ -190,7 +171,7 @@ export default function NowPlayingScreen() {
       setIsTranslated(false);
       return;
     }
-    
+
     if (translatedLyrics) {
       setIsTranslated(true);
       return;
@@ -220,23 +201,13 @@ export default function NowPlayingScreen() {
     }
   };
 
-  const handleShare = async () => {
-    if (!currentTrack) return;
-    try {
-      await Share.share({
-        message: `Listen to ${currentTrack.name} by ${currentTrack.artist_name} on Soundwave!`,
-        url: `soundwave://track/${currentTrack.id}`,
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  };
+
 
   const handleAddToPlaylist = async (playlistId: string) => {
     if (!currentTrack) return;
     setAddingToPlaylist(playlistId);
     try {
-      await api.playlists.addTrack(playlistId, currentTrack.id);
+      await api.playlists.addTrack(playlistId, currentTrack.id, currentTrack);
       setPlaylistModalVisible(false);
     } catch (e) {
       console.error('Failed to add track to playlist', e);
@@ -257,12 +228,50 @@ export default function NowPlayingScreen() {
     transform: [{ scale: heartScale.value }],
   }));
 
+  const panResponder = React.useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderEnd: (e, gestureState) => {
+        if (gestureState.dx > 50) {
+          // Swipe right -> prev
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          prevTrack();
+        } else if (gestureState.dx < -50) {
+          // Swipe left -> next
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          nextTrack();
+        }
+      },
+    })
+  ).current;
+
+  const lyricsScrollRef = useRef<ScrollView>(null);
+  const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
+  const currentMs = progress * ((currentTrack?.duration || 0) * 1000);
+
+  React.useEffect(() => {
+    if (syncedLyrics && isLyricsModalVisible) {
+      const idx = syncedLyrics.findIndex((l, i) => {
+        const nextTime = syncedLyrics[i + 1]?.time || Infinity;
+        return currentMs >= l.time && currentMs < nextTime;
+      });
+      if (idx !== -1 && idx !== activeLyricIndex) {
+        setActiveLyricIndex(idx);
+        lyricsScrollRef.current?.scrollTo({
+          y: Math.max(0, idx * 56 - 150),
+          animated: true,
+        });
+      }
+    }
+  }, [currentMs, syncedLyrics, isLyricsModalVisible, activeLyricIndex]);
+
+
   if (!currentTrack) {
     return (
       <View style={[styles.container, { justifyContent: "center", alignItems: "center", backgroundColor: "#0A0514" }]}>
         <Text style={{ color: "white", fontSize: 16 }}>No track selected</Text>
-        <TouchableOpacity 
-          onPress={() => router.canGoBack() ? router.back() : router.replace('/')} 
+        <TouchableOpacity
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/')}
           style={{ marginTop: 16 }}
         >
           <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 16 }}>Go Back</Text>
@@ -289,22 +298,6 @@ export default function NowPlayingScreen() {
     toggleLike(track);
   };
 
-  const panResponder = React.useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderEnd: (e, gestureState) => {
-        if (gestureState.dx > 50) {
-          // Swipe right -> prev
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          prevTrack();
-        } else if (gestureState.dx < -50) {
-          // Swipe left -> next
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          nextTrack();
-        }
-      },
-    })
-  ).current;
 
   const formatTime = (ms: number) => {
     if (!ms || isNaN(ms) || !isFinite(ms)) return "0:00";
@@ -320,25 +313,6 @@ export default function NowPlayingScreen() {
     ? `${Math.floor(track.duration / 60)}:${String(track.duration % 60).padStart(2, "0")}`
     : "0:00";
 
-  const lyricsScrollRef = useRef<ScrollView>(null);
-  const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
-  const currentMs = progress * durationMs;
-
-  React.useEffect(() => {
-    if (syncedLyrics && isLyricsModalVisible) {
-      const idx = syncedLyrics.findIndex((l, i) => {
-        const nextTime = syncedLyrics[i + 1]?.time || Infinity;
-        return currentMs >= l.time && currentMs < nextTime;
-      });
-      if (idx !== -1 && idx !== activeLyricIndex) {
-        setActiveLyricIndex(idx);
-        lyricsScrollRef.current?.scrollTo({
-          y: Math.max(0, idx * 56 - 150),
-          animated: true,
-        });
-      }
-    }
-  }, [currentMs, syncedLyrics, isLyricsModalVisible]);
 
   return (
     <View style={styles.container}>
@@ -462,12 +436,13 @@ export default function NowPlayingScreen() {
           </View>
         </View>
 
+        {audioError && <Text style={{color:"rgba(255,255,255,0.7)",textAlign:"center",fontSize:12}}>This song is unavailable right now. Try another song.</Text>}
         <View style={styles.waveformContainer}>
-          <Waveform
+          <SeekBar
             progress={progress}
             currentTime={currentTime}
             totalTime={totalTime}
-            onSeek={seekGlobalAudio}
+            onSeek={value => { void seekGlobalAudio(value).catch(() => usePlayerStore.setState({ audioError: 'Seek unavailable' })); }}
           />
         </View>
 
@@ -528,13 +503,13 @@ export default function NowPlayingScreen() {
               <Ionicons name="moon-outline" size={20} color={sleepTimer ? colors.accentSolid : "rgba(255,255,255,0.7)"} />
               {sleepTimer && <Text style={[styles.queueButtonText, { color: colors.accentSolid }]}>{sleepTimer}m</Text>}
             </TouchableOpacity>
-            <TouchableOpacity 
-              activeOpacity={0.7} 
+            <TouchableOpacity
+              activeOpacity={0.7}
               onPress={() => {
                 const nextSpeed = playbackSpeed === 1 ? 1.25 : playbackSpeed === 1.25 ? 1.5 : playbackSpeed === 1.5 ? 2 : 1;
                 setPlaybackSpeed(nextSpeed);
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }} 
+              }}
               style={styles.queueButton}
             >
               <Text style={{ color: playbackSpeed !== 1 ? colors.accentSolid : "rgba(255,255,255,0.7)", fontSize: 16, fontWeight: '700' }}>{playbackSpeed}x</Text>
@@ -565,13 +540,13 @@ export default function NowPlayingScreen() {
             <Text style={styles.queueTitle}>Up Next</Text>
             <View style={{ width: 28 }} />
           </View>
-          
+
           <ScrollView contentContainerStyle={styles.queueList}>
             {queue.map((qTrack, idx) => {
               const isCurrent = currentTrack?.id === qTrack.id;
               return (
-                <TouchableOpacity 
-                  key={`${qTrack.id}-${idx}`} 
+                <TouchableOpacity
+                  key={`${qTrack.id}-${idx}`}
                   style={[styles.queueItem, isCurrent && styles.queueItemActive]}
                   onPress={() => {
                     setTrack(qTrack);
@@ -623,7 +598,7 @@ export default function NowPlayingScreen() {
             <Text style={styles.queueTitle}>Add to Playlist</Text>
             <View style={{ width: 28 }} />
           </View>
-          
+
           <ScrollView contentContainerStyle={styles.queueList}>
             {playlists.length === 0 ? (
               <View style={{ alignItems: 'center', marginTop: 40 }}>
@@ -631,8 +606,8 @@ export default function NowPlayingScreen() {
               </View>
             ) : (
               playlists.map((playlist) => (
-                <TouchableOpacity 
-                  key={playlist.id} 
+                <TouchableOpacity
+                  key={playlist.id}
                   style={styles.queueItem}
                   onPress={() => handleAddToPlaylist(playlist.id)}
                   activeOpacity={0.7}
@@ -669,11 +644,11 @@ export default function NowPlayingScreen() {
             <Text style={styles.queueTitle}>Sleep Timer</Text>
             <View style={{ width: 28 }} />
           </View>
-          
+
           <ScrollView contentContainerStyle={styles.queueList}>
             {[5, 10, 15, 30, 45, 60].map((minutes) => (
-              <TouchableOpacity 
-                key={minutes} 
+              <TouchableOpacity
+                key={minutes}
                 style={[styles.queueItem, sleepTimer === minutes && styles.queueItemActive]}
                 onPress={() => {
                   setSleepTimer(minutes);
@@ -688,7 +663,7 @@ export default function NowPlayingScreen() {
                 </View>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.queueItem}
               onPress={() => {
                 setSleepTimer(null);
@@ -718,7 +693,7 @@ export default function NowPlayingScreen() {
               <Feather name="chevron-down" size={28} color="#FFF" />
             </TouchableOpacity>
             <Text style={styles.queueTitle}>Lyrics</Text>
-            
+
             <TouchableOpacity onPress={handleToggleTranslation} disabled={!plainLyrics || plainLyrics.includes("Lyrics not found") || isLoadingLyrics || isTranslating} style={[styles.closeButton, { opacity: plainLyrics && !plainLyrics.includes("Lyrics not found") ? 1 : 0.5 }]}>
               {isTranslating ? (
                 <IOSLoader size="small" color="#FFF" />
@@ -729,7 +704,7 @@ export default function NowPlayingScreen() {
               )}
             </TouchableOpacity>
           </View>
-          
+
           <ScrollView ref={lyricsScrollRef} contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl }}>
             {isLoadingLyrics ? (
               <IOSLoader size="large" color={colors.accentSolid} style={{ marginTop: 40 }} text="Loading..." />
@@ -742,12 +717,12 @@ export default function NowPlayingScreen() {
                     activeOpacity={0.7}
                     style={{ marginVertical: 12 }}
                   >
-                    <Text 
-                      style={{ 
-                        color: idx === activeLyricIndex ? '#FFF' : 'rgba(255,255,255,0.4)', 
-                        fontSize: idx === activeLyricIndex ? 32 : 24, 
-                        lineHeight: idx === activeLyricIndex ? 46 : 38, 
-                        fontWeight: idx === activeLyricIndex ? '800' : '600', 
+                    <Text
+                      style={{
+                        color: idx === activeLyricIndex ? '#FFF' : 'rgba(255,255,255,0.4)',
+                        fontSize: idx === activeLyricIndex ? 32 : 24,
+                        lineHeight: idx === activeLyricIndex ? 46 : 38,
+                        fontWeight: idx === activeLyricIndex ? '800' : '600',
                         textAlign: 'left',
                         textShadowColor: idx === activeLyricIndex ? 'rgba(255,255,255,0.3)' : 'transparent',
                         textShadowOffset: { width: 0, height: 0 },
@@ -811,7 +786,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     marginVertical: spacing.md,
     // Add overflow hidden to prevent completely breaking the flex layout if side covers spill
-    overflow: "hidden", 
+    overflow: "hidden",
     width: "100%",
   },
   sideCoverWrapper: {
@@ -922,11 +897,23 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.15)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 0, // Fixes ugly solid grey circle bug behind transparent elements on Android
+      },
+      web: {
+        shadowColor: "#000",
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      }
+    }),
   },
   // Bottom actions
   bottomActionsRow: {

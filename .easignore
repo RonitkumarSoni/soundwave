@@ -1,0 +1,23 @@
+node_modules/
+.git/
+.expo/
+android/
+ios/
+backend/
+.env
+.env.*
+*.db
+*.db-shm
+*.db-wal
+**/*service-account*.json
+**/*.pem
+**/*.key
+**/*.jks
+**/*.p12
+.audit-*/
+.audit-*.json
+.audit-*
+dist/
+web-build/
+coverage/
+# google-services.json is intentionally included: public Android Firebase configuration.

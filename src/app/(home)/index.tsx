@@ -1,8 +1,8 @@
 import { Image } from 'expo-image';
 import React, { useState, useEffect } from "react";
-import { FlatList, View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { FlatList, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { LinearGradient } from "expo-linear-gradient";
-import { IOSLoader } from "@/components/IOSLoader";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -14,7 +14,7 @@ import { TrackRow } from "@/components/TrackRow";
 import { CardSkeleton, AppHeaderSkeleton, FilterChipsSkeleton, ForYouSkeleton } from "@/components/Skeletons";
 import { filterChips, dailyMixes, newReleases, allTracks, topPodcasts } from "@/data/mockData";
 import { api } from "@/lib/api";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { usePlayerStore } from "@/stores/usePlayerStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { useBottomPadding } from "@/hooks/useBottomPadding";
@@ -22,10 +22,10 @@ import { useBottomPadding } from "@/hooks/useBottomPadding";
 function ArtistRow({ artist }: { artist: any }) {
   const router = useRouter();
   return (
-    <TouchableOpacity 
-      style={styles.artistRow} 
+    <TouchableOpacity
+      style={styles.artistRow}
       activeOpacity={0.7}
-      onPress={() => router.push(`/artist/${artist.id}`)}
+      onPress={() => router.push({ pathname: '/artist/[id]', params: { id: artist.id, source: artist.source || 'spotify' } })}
     >
       <Image source={{ uri: artist.image }} style={styles.artistAvatar} />
       <View style={styles.artistInfo}>
@@ -51,16 +51,15 @@ export default function HomeScreen() {
   const [country, setCountry] = useState<string>('India');
   const insets = useSafeAreaInsets();
   const bottomPadding = useBottomPadding();
-  
+
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
   const recentlyPlayed = usePlayerStore((s) => s.recentlyPlayed);
   const downloadedTracks = usePlayerStore((s) => s.downloadedTracks);
-  const initRecentlyPlayed = usePlayerStore((s) => s.initRecentlyPlayed);
+
   const offlineMode = useSettingsStore((s) => s.offlineMode);
 
   useEffect(() => {
-    initRecentlyPlayed();
     // Fetch region (using a CORS-friendly API for Web)
     fetch('https://ipwho.is/')
       .then(res => res.json())
@@ -91,58 +90,6 @@ export default function HomeScreen() {
     });
   };
 
-  const loadInitialData = async (filter: string) => {
-    if (offlineMode) {
-      setLoading(false);
-      return;
-    }
-    
-    setLoading(true);
-    setOffset(0);
-    setHasMore(true);
-
-    try {
-      if (filter === "New Artists") {
-        const artists = await api.getArtists(10, 0);
-        setListData(artists);
-      } else {
-        const order = getOrderParam(filter);
-        const tracks = await api.getPopular(10, 0, order, country);
-        setListData(deduplicateTracks(tracks));
-      }
-      
-      // Load 30-sec previews
-      if (previewTracks.length === 0) {
-        const previews = await api.getPreviews();
-        setPreviewTracks(previews);
-      }
-      
-      // Load YouTube Hits
-      if (youtubeTracks.length === 0) {
-        const ytHits = await api.getYoutubeHits();
-        setYoutubeTracks(ytHits);
-      }
-
-      // Load Recommended Tracks (real images)
-      if (recommendedTracks.length === 0) {
-        const queries = ["Blinding Lights The Weeknd", "Ocean Eyes Billie Eilish", "Circles Post Malone", "Levitating Dua Lipa", "Watermelon Sugar Harry Styles"];
-        const recTracks = await Promise.all(
-          queries.map(async (q) => {
-            try {
-              const res = await api.search(q);
-              return res.tracks && res.tracks.length > 0 ? res.tracks[0] : null;
-            } catch (e) {
-              return null;
-            }
-          })
-        );
-        setRecommendedTracks(recTracks.filter(Boolean));
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const loadMoreData = async () => {
     if (loadingMore || !hasMore || loading) return;
     setLoadingMore(true);
@@ -168,8 +115,20 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    loadInitialData(activeFilter);
-  }, [activeFilter, offlineMode]);
+    let cancelled = false;
+    setOffset(0); setHasMore(true);
+    if (offlineMode) { setLoading(false); return; }
+    setLoading(true);
+    const main = activeFilter === "New Artists" ? api.getArtists(10, 0) : api.getPopular(10, 0, activeFilter === "Hot Tracks" ? "popularity_total" : activeFilter === "Editor's Picks" ? "releasedate" : "popularity_week", country);
+    const publish = (promise: Promise<any>, setter: (value: any) => void) => promise.then(value => { if (!cancelled) setter(value); });
+    void publish(main, setListData).catch(() => {
+      if (!cancelled) { setListData([]); }
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    void publish(api.getPreviews(), setPreviewTracks).catch(() => {});
+    void publish(api.getYoutubeHits(), setYoutubeTracks).catch(() => {});
+    void publish(api.getPopular(5, 0, "popularity_total", country), setRecommendedTracks).catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeFilter, offlineMode, country]);
 
   const renderSkeletons = () => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
@@ -213,14 +172,11 @@ export default function HomeScreen() {
                 Showing your downloaded tracks. Network access is disabled.
               </Text>
               {downloadedTracks.map((track, idx) => (
-                <TrackRow 
-                  key={track.id} 
-                  track={track} 
-                  onPress={() => {
-                    setQueue(downloadedTracks);
-                    setTrack(track);
-                  }}
-                  isLast={idx === downloadedTracks.length - 1}
+                <TrackRow
+                  key={track.id}
+                  track={track}
+                  index={idx}
+                  contextQueue={downloadedTracks}
                 />
               ))}
             </View>
@@ -271,7 +227,7 @@ export default function HomeScreen() {
               <View style={{ marginBottom: spacing.md, marginTop: spacing.sm }}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>
-                    {activeFilter === "Hot Tracks" ? `Trending in ${country}` : "Daily Mixes"}
+                    Daily Mixes
                   </Text>
                 </View>
                 <FlatList
@@ -340,8 +296,8 @@ export default function HomeScreen() {
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
                   renderItem={({ item }) => (
-                    <TouchableOpacity 
-                      style={styles.recentCard} 
+                    <TouchableOpacity
+                      style={styles.recentCard}
                       activeOpacity={0.7}
                       onPress={() => {
                         setTrack(item);
@@ -368,8 +324,8 @@ export default function HomeScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
                     renderItem={({ item }) => (
-                      <TouchableOpacity 
-                        style={styles.recentCard} 
+                      <TouchableOpacity
+                        style={styles.recentCard}
                         activeOpacity={0.7}
                         onPress={() => {
                           setTrack(item);
@@ -388,7 +344,7 @@ export default function HomeScreen() {
               {previewTracks.length > 0 && (
                 <View style={{ marginBottom: spacing.md }}>
                   <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>30-Sec Previews (via iTunes)</Text>
+                    <Text style={styles.sectionTitle}>Song previews</Text>
                   </View>
                   <FlatList
                     data={previewTracks}
@@ -396,8 +352,8 @@ export default function HomeScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
                     renderItem={({ item }) => (
-                      <TouchableOpacity 
-                        style={styles.recentCard} 
+                      <TouchableOpacity
+                        style={styles.recentCard}
                         activeOpacity={0.7}
                         onPress={() => {
                           setTrack(item);
@@ -425,8 +381,8 @@ export default function HomeScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}
                     renderItem={({ item }) => (
-                      <TouchableOpacity 
-                        style={styles.recentCard} 
+                      <TouchableOpacity
+                        style={styles.recentCard}
                         activeOpacity={0.7}
                         onPress={() => {
                           setTrack(item);
@@ -456,7 +412,7 @@ export default function HomeScreen() {
         </>
       )}
     </View>
-  ), [activeFilter, previewTracks, youtubeTracks, loading, insets.top, recentlyPlayed]);
+  ), [activeFilter, previewTracks, youtubeTracks, loading, insets.top, recentlyPlayed, downloadedTracks, offlineMode, recommendedTracks, router, setQueue, setTrack]);
 
   const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }: any) => {
     const paddingToBottom = 300;

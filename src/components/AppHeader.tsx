@@ -15,7 +15,7 @@ interface AppHeaderProps {
 export function AppHeader({ mode, title }: AppHeaderProps) {
   const router = useRouter();
   const { user } = useAuthStore();
-  
+
   const userName = user?.display_name || "User";
   const displayTitle =
     mode === "greeting" ? `Hello, ${userName}` : title || "Your library";
@@ -33,8 +33,8 @@ export function AppHeader({ mode, title }: AppHeaderProps) {
     <View style={styles.container}>
       {/* Top row: avatar + icon buttons */}
       <View style={styles.topRow}>
-        <TouchableOpacity 
-          activeOpacity={0.7} 
+        <TouchableOpacity
+          activeOpacity={0.7}
           onPress={() => router.navigate("/(settings)")}
           style={styles.avatarContainer}
         >
@@ -51,8 +51,8 @@ export function AppHeader({ mode, title }: AppHeaderProps) {
         </TouchableOpacity>
 
         <View style={styles.iconButtons}>
-          <TouchableOpacity 
-            style={styles.iconButton} 
+          <TouchableOpacity
+            style={styles.iconButton}
             activeOpacity={0.7}
             onPress={() => router.navigate("/(search)")}
           >
@@ -60,8 +60,8 @@ export function AppHeader({ mode, title }: AppHeaderProps) {
               <Ionicons name="search" size={18} color={colors.label} />
             </BlurView>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.iconButton} 
+          <TouchableOpacity
+            style={styles.iconButton}
             activeOpacity={0.7}
             onPress={() => router.push('/history')}
           >
@@ -69,8 +69,8 @@ export function AppHeader({ mode, title }: AppHeaderProps) {
               <Ionicons name="time-outline" size={18} color={colors.label} />
             </BlurView>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.iconButton} 
+          <TouchableOpacity
+            style={styles.iconButton}
             activeOpacity={0.7}
             onPress={() => router.push('/notifications')}
           >

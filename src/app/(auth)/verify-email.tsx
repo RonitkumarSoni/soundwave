@@ -1,27 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert, Linking } from 'react-native';
+import { useAuthStore } from '@/stores/useAuthStore';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 import { auth } from '@/lib/firebase';
-import { sendEmailVerification, reload } from 'firebase/auth';
+import { reload } from 'firebase/auth';
 
 import { colors, gradients } from '@/theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
-  const [isResending, setIsResending] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
-
   const email = auth.currentUser?.email || 'your email address';
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (cooldown > 0) {
-      timer = setTimeout(() => setCooldown(c => c - 1), 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [cooldown]);
 
   const handleOpenEmail = () => {
     if (Platform.OS === 'web') {
@@ -32,50 +23,36 @@ export default function VerifyEmailScreen() {
       else window.open('https://mail.google.com', '_blank'); // fallback
     } else {
       Linking.openURL('message://').catch(() => {
-        Alert.alert('Error', 'Could not open email app.');
+        Toast.show({ type: 'error', text1: 'Error', text2: 'Could not open email app.' });
       });
-    }
-  };
-
-  const handleResend = async () => {
-    if (cooldown > 0 || !auth.currentUser) return;
-    try {
-      setIsResending(true);
-      await sendEmailVerification(auth.currentUser);
-      setCooldown(60);
-      if (Platform.OS === 'web') {
-        alert('Verification email sent!');
-      } else {
-        Alert.alert('Sent!', 'A new verification email has been sent.');
-      }
-    } catch (err: any) {
-      const msg = err.message || 'Failed to resend email';
-      if (Platform.OS === 'web') alert(msg);
-      else Alert.alert('Error', msg);
-    } finally {
-      setIsResending(false);
     }
   };
 
   const handleCheckVerification = async () => {
     if (!auth.currentUser) return;
-    
+
     // We must reload the user to get the latest emailVerified status
+    try {
     await reload(auth.currentUser);
-    
+
     if (auth.currentUser.emailVerified) {
+      await auth.currentUser.getIdToken(true);
+      await useAuthStore.getState().syncUser(auth.currentUser);
       router.replace('/onboarding');
     } else {
       const msg = "Your email hasn't been verified yet. Please check your inbox and click the verification link.";
       if (Platform.OS === 'web') alert(msg);
-      else Alert.alert('Not Verified', msg);
+      else Toast.show({ type: 'error', text1: 'Not Verified', text2: msg });
+    }
+    } catch {
+      Toast.show({ type: "error", text1: "Verification check failed", text2: "Check your connection and retry." });
     }
   };
 
   return (
     <View style={styles.container}>
       <LinearGradient colors={[gradients.background[0], gradients.background[1], gradients.background[2]]} style={StyleSheet.absoluteFill} />
-      
+
       <View style={styles.content}>
         <View style={styles.iconContainer}>
           <LinearGradient
@@ -84,7 +61,7 @@ export default function VerifyEmailScreen() {
           />
           <Ionicons name="mail-unread-outline" size={60} color="#FFF" />
         </View>
-        
+
         <Text style={styles.title}>Check your email</Text>
         <Text style={styles.subtitle}>
           We've sent a verification link to{'\n'}
@@ -107,14 +84,8 @@ export default function VerifyEmailScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity 
-          style={styles.resendButton} 
-          onPress={handleResend}
-          disabled={cooldown > 0 || isResending}
-        >
-          <Text style={[styles.resendText, (cooldown > 0 || isResending) && styles.resendDisabled]}>
-            {cooldown > 0 ? `Resend email in ${cooldown}s` : 'Resend verification email'}
-          </Text>
+        <TouchableOpacity style={styles.resendButton} onPress={async () => { await useAuthStore.getState().logout(); router.replace('/(auth)/welcome'); }}>
+          <Text style={styles.resendText}>Use a different account</Text>
         </TouchableOpacity>
       </View>
     </View>

@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { colors, gradients, spacing } from "@/theme/colors";
+
+import { spacing } from "@/theme/colors";
 
 interface WaveformProps {
   progress: number; // 0 to 1

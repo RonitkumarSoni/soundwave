@@ -22,14 +22,14 @@ export const IOSLoader: React.FC<IOSLoaderProps> = ({ size = 'small', color = '#
   }, [rotation]);
 
   const dim = size === 'large' ? 28 : typeof size === 'number' ? size : 16;
-  
+
   const spin = rotation.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
   const spokes = Array.from({ length: 12 }).map((_, i) => i);
-  
+
   const spokeWidth = Math.max(2, dim * 0.08);
   const spokeHeight = Math.max(4, dim * 0.28);
 

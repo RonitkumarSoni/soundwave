@@ -1,56 +1,48 @@
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
-import { FlatList, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { FlatList, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '@/lib/api';
-import { colors, gradients, spacing, borderRadius } from '@/theme/colors';
+import { LoadError } from '@/components/LoadError';
+import { gradients, spacing, borderRadius } from '@/theme/colors';
 import { TrackRow } from '@/components/TrackRow';
 import { PlaylistHeaderSkeleton, TrackRowSkeleton } from '@/components/Skeletons';
 import { usePlayerStore } from '@/stores/usePlayerStore';
 import { useBottomPadding } from '@/hooks/useBottomPadding';
 
 export default function AlbumDetailScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, source = "jiosaavn" } = useLocalSearchParams<{ id: string; source?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
+
   const [album, setAlbum] = useState<any>(null);
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const bottomPadding = useBottomPadding();
 
   const savedAlbums = usePlayerStore((s) => s.savedAlbums);
   const toggleSaveAlbum = usePlayerStore((s) => s.toggleSaveAlbum);
 
-  const isSaved = savedAlbums.some((a) => a.id === id);
+  const isSaved = savedAlbums.some((a) => a.id === id && (a.source || "jiosaavn") === source);
 
   useEffect(() => {
-    loadAlbumData();
-  }, [id]);
+    let cancelled = false;
+    setLoading(true); setLoadError(false);
+    setAlbum(null); setTracks([]);
+    void Promise.all([api.getAlbumById(id, source), api.getAlbumTracks(id, source)]).then(([details, items]) => {
+      if (cancelled) return;
+      if (!details) throw new Error("Details unavailable");
+      setAlbum(details); setTracks(items || []);
+    }).catch(() => { if (!cancelled) setLoadError(true); }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [id, source, attempt]);
 
-  const loadAlbumData = async () => {
-    setLoading(true);
-    try {
-      const albumData = await api.getAlbumById(id as string);
-      setAlbum(albumData);
-      
-      const tracksData = await api.getAlbumTracks(id as string);
-      setTracks(tracksData || []);
-      
-      // Fallback
-      if (!albumData && !tracksData?.length) {
-        const fallback = await api.getPopular(10, 0, 'releasedate');
-        setTracks(fallback);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (loadError) return <LoadError title="Album could not load" onRetry={() => setAttempt(value => value + 1)} />;
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
@@ -58,7 +50,7 @@ export default function AlbumDetailScreen() {
         colors={[gradients.background[0], gradients.background[1]]}
         style={StyleSheet.absoluteFill}
       />
-      
+
       <View style={[styles.headerActions, { top: insets.top + spacing.md }]}>
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={24} color="#FFF" />
@@ -66,9 +58,9 @@ export default function AlbumDetailScreen() {
       </View>
 
       <View style={[styles.albumCoverContainer, { marginTop: insets.top + 60 }]}>
-        <Image 
-          source={{ uri: album?.image || 'https://via.placeholder.com/300' }} 
-          style={styles.albumImage} 
+        <Image
+          source={{ uri: album?.image || 'https://via.placeholder.com/300' }}
+          style={styles.albumImage}
         />
       </View>
 
@@ -78,7 +70,7 @@ export default function AlbumDetailScreen() {
           <Text style={styles.artistName}>
             {album?.artist_name || 'Artist Name'}
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.followButton, isSaved && styles.followingButton]}
             onPress={() => album && toggleSaveAlbum(album)}
           >

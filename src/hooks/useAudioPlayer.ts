@@ -1,246 +1,75 @@
-import { useEffect, useRef, useCallback } from "react";
-import { Platform } from "react-native";
-import { Audio } from "expo-av";
-import { usePlayerStore, Track } from "@/stores/usePlayerStore";
-
-const isWeb = Platform.OS === "web";
-
+import { useEffect } from 'react';
+import { Audio } from 'expo-av';
+import { usePlayerStore } from '@/stores/usePlayerStore';
+import { audioUri, sameTrack, trackKey } from '@/lib/tracks';
+import { useSettingsStore } from '@/stores/useSettingsStore';
 export let soundInstance: Audio.Sound | null = null;
-
-export const seekGlobalAudio = async (position: number) => {
-  const { currentTrack, setProgress } = usePlayerStore.getState();
-  setProgress(position);
-  if (currentTrack && soundInstance) {
-    const durationMs = currentTrack.duration * 1000;
-    await soundInstance.setPositionAsync(position * durationMs);
+let serial = Promise.resolve();
+let revision = 0;
+let loadedKey = '';
+let loadedRevision = -1;
+let loadedUri = '';
+async function syncSound(version: number) {
+  if (version !== revision) return;
+  const state = usePlayerStore.getState();
+  const track = state.currentTrack;
+  const downloaded = state.downloadedTracks.find(t => sameTrack(t, track));
+  const uri = track ? audioUri({ ...track, localUri: downloaded?.localUri || track.localUri }) : '';
+  if (!track) {
+    if (soundInstance) await soundInstance.unloadAsync();
+    soundInstance = null; loadedKey = ''; return;
   }
-};
-
+  if (!uri) throw new Error('This track has no playable audio.');
+  if (useSettingsStore.getState().offlineMode && !downloaded?.localUri) throw new Error('Offline playback requires a downloaded file in the mobile app.');
+  const key = trackKey(track);
+  if (!soundInstance || loadedKey !== key || uri !== loadedUri) {
+    if (soundInstance) await soundInstance.unloadAsync();
+    soundInstance = null;
+    const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: false, progressUpdateIntervalMillis: 500 });
+    if (version !== revision) { await sound.unloadAsync(); return; }
+    soundInstance = sound; loadedKey = key; loadedUri = uri; loadedRevision = state.playbackRevision;
+    sound.setOnPlaybackStatusUpdate(status => {
+      if (soundInstance !== sound) return;
+      if (!status.isLoaded) {
+        if (status.error) usePlayerStore.setState({ isPlaying: false, audioError: 'Audio could not be played. Try another track.' });
+        return;
+      }
+      usePlayerStore.getState().updateProgress(status.positionMillis, status.durationMillis ? status.positionMillis / status.durationMillis : 0);
+      if (status.didJustFinish && !status.isLooping) usePlayerStore.getState().finishTrack();
+    });
+  } else if (loadedRevision !== state.playbackRevision) {
+    await soundInstance.setPositionAsync(0); loadedRevision = state.playbackRevision;
+  }
+  if (version !== revision || !soundInstance) return;
+  const desired = usePlayerStore.getState();
+  await soundInstance.setIsLoopingAsync(desired.repeatMode === 'one');
+  await soundInstance.setRateAsync(desired.playbackRate, true);
+  if (version !== revision) return;
+  if (usePlayerStore.getState().isPlaying) await soundInstance.playAsync(); else await soundInstance.pauseAsync();
+}
+export async function seekGlobalAudio(position: number) {
+  if (!soundInstance) return;
+  const status = await soundInstance.getStatusAsync();
+  if (!status.isLoaded || !status.durationMillis) return;
+  const fraction = Math.max(0, Math.min(1, position));
+  await soundInstance.setPositionAsync(fraction * status.durationMillis);
+  usePlayerStore.getState().updateProgress(fraction * status.durationMillis, fraction);
+}
 export function useAudioPlayer() {
-  const {
-    currentTrack,
-    isPlaying,
-    progress,
-    currentTimeMs,
-    repeatMode,
-    playbackRate,
-    setTrack,
-    togglePlay,
-    play,
-    pause,
-    setProgress,
-    setCurrentTime,
-    nextTrack,
-    prevTrack,
-  } = usePlayerStore();
-
-  // Initialize audio session on mount
   useEffect(() => {
-    const initAudio = async () => {
-      try {
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: true,
-          shouldDuckAndroid: true,
-        });
-      } catch (e) {
-        console.warn("Failed to set audio mode", e);
-      }
+    const schedule = () => {
+      const version = ++revision;
+      serial = serial.then(() => syncSound(version)).catch(error => {
+        if (version === revision) usePlayerStore.setState({ isPlaying: false, audioError: error instanceof Error ? error.message : 'Audio playback failed' });
+      });
     };
-    initAudio();
-    
-    return () => {
-      if (soundInstance) {
-        soundInstance.unloadAsync();
-        soundInstance = null;
-      }
-    };
+    const unsubscribe = usePlayerStore.subscribe((state, previous) => {
+      if (state.currentTrack !== previous.currentTrack || state.playbackRevision !== previous.playbackRevision ||
+          state.isPlaying !== previous.isPlaying || state.repeatMode !== previous.repeatMode ||
+          state.playbackRate !== previous.playbackRate || state.downloadedTracks !== previous.downloadedTracks) schedule();
+    });
+    const settings = useSettingsStore.subscribe((state, previous) => { if (state.offlineMode !== previous.offlineMode) schedule(); });
+    schedule();
+    return () => { unsubscribe(); settings(); ++revision; serial = serial.then(async () => { await soundInstance?.unloadAsync(); soundInstance = null; loadedKey = ''; }); };
   }, []);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    const loadNewTrack = async () => {
-      if (!currentTrack) {
-        if (soundInstance) {
-          await soundInstance.unloadAsync();
-          soundInstance = null;
-        }
-        return;
-      }
-      
-      // Determine correct audio URL based on source
-      let audioUri = "";
-      
-      if (currentTrack.source === 'deezer') {
-        audioUri = currentTrack.audio;
-      } else if (currentTrack.source === 'spotify') {
-        if (currentTrack.audio) {
-          audioUri = currentTrack.audio;
-        } else {
-          console.error("Spotify track does not have audio preview available.");
-          return;
-        }
-      } else {
-        // Fallback for Jamendo and others
-        audioUri = currentTrack.audiodownload || currentTrack.audio;
-      }
-
-      if (!audioUri) {
-        console.error("Error loading audio: track has no audio URL", currentTrack);
-        return;
-      }
-      
-      // Automatic Song Caching Logic
-      if (!isWeb) {
-        try {
-          const FileSystem = require('expo-file-system');
-          const CACHE_DIR = `${FileSystem.documentDirectory}audio_cache/`;
-          await FileSystem.makeDirectoryAsync(CACHE_DIR, { intermediates: true }).catch(() => {});
-          
-          const filename = `${currentTrack.id}_${currentTrack.source || 'default'}.m4a`;
-          const fileUri = `${CACHE_DIR}${filename}`;
-          
-          const fileInfo = await FileSystem.getInfoAsync(fileUri);
-          if (fileInfo.exists) {
-            audioUri = fileUri; // Play from local cache
-          } else {
-            // Start background download for future plays
-            FileSystem.downloadAsync(audioUri, fileUri).catch((e: any) => console.log('Cache download failed', e));
-          }
-        } catch (e) {
-          console.log('Caching setup failed:', e);
-        }
-      }
-
-      try {
-        if (soundInstance) {
-          await soundInstance.unloadAsync();
-          soundInstance = null;
-        }
-        
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: audioUri },
-          { shouldPlay: isPlaying, rate: playbackRate, shouldCorrectPitch: true }
-        );
-
-        if (isCancelled) {
-          // If a new track was selected while this one was loading, unload and discard it
-          await sound.unloadAsync();
-          return;
-        }
-
-        sound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
-        soundInstance = sound;
-      } catch (error: any) {
-        console.warn("Error loading audio:", error);
-        // Pause playback so UI reflects that the track is not playing
-        usePlayerStore.getState().pause();
-      }
-    };
-    
-    loadNewTrack();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [currentTrack?.id]); // Only re-run when track ID changes
-
-  // Update native loop mode when repeatMode changes
-  useEffect(() => {
-    const updateLoop = async () => {
-      if (soundInstance) {
-        await soundInstance.setIsLoopingAsync(repeatMode === "one");
-      }
-    };
-    updateLoop();
-  }, [repeatMode]);
-
-  // Update playback rate when it changes
-  useEffect(() => {
-    const updateRate = async () => {
-      if (soundInstance) {
-        await soundInstance.setRateAsync(playbackRate, true);
-      }
-    };
-    updateRate();
-  }, [playbackRate]);
-
-  // Handle play/pause state changes from store
-  useEffect(() => {
-    const updatePlayState = async () => {
-      try {
-        if (!soundInstance) return;
-        const status = await soundInstance.getStatusAsync();
-        if (!status.isLoaded) return;
-        
-        if (isPlaying) {
-          await soundInstance.playAsync();
-        } else {
-          await soundInstance.pauseAsync();
-        }
-      } catch (error) {
-        console.error("Error updating play state:", error);
-      }
-    };
-    
-    updatePlayState();
-  }, [isPlaying]);
-
-  const onPlaybackStatusUpdate = (status: any) => {
-    if (status.isLoaded) {
-      if (status.didJustFinish) {
-        const state = usePlayerStore.getState();
-        if (state.repeatMode !== "one") {
-          // Track finished, go to next
-          nextTrack();
-        }
-        // If repeatMode === 'one', Expo AV isLooping will handle it automatically
-      } else {
-        // Update progress
-        const currentMs = status.positionMillis;
-        const durationMs = status.durationMillis || (currentTrack?.duration ? currentTrack.duration * 1000 : 1);
-        setCurrentTime(currentMs);
-        setProgress(currentMs / durationMs);
-      }
-    }
-  };
-
-  const playTrack = useCallback(
-    (track: Track) => {
-      const { currentTrack, play } = usePlayerStore.getState();
-      if (currentTrack?.id === track.id) {
-        seekGlobalAudio(0);
-        play();
-      } else {
-        setTrack(track);
-      }
-    },
-    [setTrack]
-  );
-
-  const seekTo = useCallback(
-    async (position: number) => {
-      setProgress(position);
-      if (currentTrack && soundInstance) {
-        const durationMs = currentTrack.duration * 1000;
-        await soundInstance.setPositionAsync(position * durationMs);
-      }
-    },
-    [setProgress, currentTrack]
-  );
-
-  return {
-    currentTrack,
-    isPlaying,
-    progress,
-    currentTimeMs,
-    playTrack,
-    togglePlay,
-    play,
-    pause,
-    seekTo,
-    nextTrack,
-    prevTrack,
-  };
 }

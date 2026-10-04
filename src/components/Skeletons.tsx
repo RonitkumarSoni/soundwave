@@ -1,26 +1,20 @@
 import React, { useEffect } from 'react';
 import { View, StyleSheet, StyleProp, ViewStyle, Dimensions } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withSequence,
-} from 'react-native-reanimated';
-import { colors, spacing, borderRadius } from '@/theme/colors';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
+import { spacing } from '@/theme/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-export function Skeleton({ 
-  style, 
-  width, 
-  height, 
-  borderRadius = 8 
-}: { 
-  style?: StyleProp<ViewStyle>; 
-  width?: number | string; 
-  height?: number | string; 
-  borderRadius?: number; 
+export function Skeleton({
+  style,
+  width,
+  height,
+  borderRadius = 8
+}: {
+  style?: StyleProp<ViewStyle>;
+  width?: ViewStyle["width"];
+  height?: ViewStyle["height"];
+  borderRadius?: number;
 }) {
   const opacity = useSharedValue(0.3);
 
@@ -33,7 +27,7 @@ export function Skeleton({
       -1,
       true
     );
-  }, []);
+  }, [opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -119,7 +113,7 @@ export function FilterChipsSkeleton() {
 }
 
 export function ForYouSkeleton() {
-  const MAX_CARD_WIDTH = 340; 
+  const MAX_CARD_WIDTH = 340;
   const CARD_WIDTH = Math.min(SCREEN_WIDTH - spacing.lg * 2, MAX_CARD_WIDTH);
   return (
     <View style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>

@@ -11,7 +11,7 @@ interface Props {
 export const PasswordStrengthBar = ({ password }: Props) => {
   const hasMinLength = password.length >= 8;
   const hasLetterAndNumber = /(?=.*[a-zA-Z])(?=.*[0-9])/.test(password);
-  
+
   let strength = 0;
   if (password.length > 0) strength = 1; // Weak
   if (hasMinLength || hasLetterAndNumber) strength = 2; // Fair
@@ -36,23 +36,23 @@ export const PasswordStrengthBar = ({ password }: Props) => {
       <View style={styles.barContainer}>
         <Animated.View style={[styles.bar, animatedBarStyle]} />
       </View>
-      
+
       <View style={styles.checklist}>
         <View style={styles.checkItem}>
-          <Ionicons 
-            name={hasMinLength ? "checkmark-circle" : "ellipse-outline"} 
-            size={16} 
-            color={hasMinLength ? colors.accentSolid : 'rgba(255,255,255,0.5)'} 
+          <Ionicons
+            name={hasMinLength ? "checkmark-circle" : "ellipse-outline"}
+            size={16}
+            color={hasMinLength ? colors.accentSolid : 'rgba(255,255,255,0.5)'}
           />
           <Text style={[styles.checkText, hasMinLength && styles.checkTextActive]}>
             At least 8 characters
           </Text>
         </View>
         <View style={styles.checkItem}>
-          <Ionicons 
-            name={hasLetterAndNumber ? "checkmark-circle" : "ellipse-outline"} 
-            size={16} 
-            color={hasLetterAndNumber ? colors.accentSolid : 'rgba(255,255,255,0.5)'} 
+          <Ionicons
+            name={hasLetterAndNumber ? "checkmark-circle" : "ellipse-outline"}
+            size={16}
+            color={hasLetterAndNumber ? colors.accentSolid : 'rgba(255,255,255,0.5)'}
           />
           <Text style={[styles.checkText, hasLetterAndNumber && styles.checkTextActive]}>
             Contains a letter and a number

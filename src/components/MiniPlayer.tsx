@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 
 export function MiniPlayer() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const audioError = usePlayerStore((s) => s.audioError);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
@@ -46,7 +47,7 @@ export function MiniPlayer() {
                 {currentTrack.name}
               </Text>
               <Text style={styles.artist} numberOfLines={1}>
-                {currentTrack.artist_name}
+                {audioError ? 'Unavailable right now · try another song' : currentTrack.artist_name}
               </Text>
             </View>
 

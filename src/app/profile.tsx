@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { usePlayerStore } from '@/stores/usePlayerStore';
@@ -14,7 +14,7 @@ export default function PublicProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
-  
+
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const followedArtists = usePlayerStore((s) => s.followedArtists);
@@ -48,7 +48,7 @@ export default function PublicProfileScreen() {
         style={StyleSheet.absoluteFill}
       />
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={{ paddingBottom: 160 }}
         showsVerticalScrollIndicator={false}
       >
@@ -60,14 +60,14 @@ export default function PublicProfileScreen() {
 
         <View style={[styles.profileHeader, { marginTop: insets.top + 60 }]}>
           <View style={styles.avatarContainer}>
-            <Image 
-              source={{ uri: user?.avatar_url || 'https://via.placeholder.com/150' }} 
-              style={styles.avatar} 
+            <Image
+              source={{ uri: user?.avatar_url || 'https://via.placeholder.com/150' }}
+              style={styles.avatar}
             />
           </View>
           <Text style={styles.userName}>{user?.display_name || 'User Name'}</Text>
           <Text style={styles.userHandle}>@{user?.email?.split('@')[0] || 'username'}</Text>
-          
+
           <View style={styles.statsRow}>
             {stats.map((stat, i) => (
               <View key={i} style={styles.statBox}>
@@ -104,8 +104,8 @@ export default function PublicProfileScreen() {
             <Text style={[styles.sectionTitle, { marginTop: spacing.xl }]}>Public Playlists</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
               {playlists.map((pl) => (
-                <TouchableOpacity 
-                  key={pl.id} 
+                <TouchableOpacity
+                  key={pl.id}
                   style={styles.playlistCard}
                   onPress={() => router.push(`/playlist/${pl.id}`)}
                 >
@@ -124,10 +124,10 @@ export default function PublicProfileScreen() {
                 <Text style={[styles.sectionTitle, { marginTop: spacing.xl }]}>Following Artists</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
                   {followedArtists.map((artist) => (
-                    <TouchableOpacity 
-                      key={artist.id} 
+                    <TouchableOpacity
+                      key={artist.id}
                       style={styles.artistCard}
-                      onPress={() => router.push(`/artist/${artist.id}`)}
+                      onPress={() => router.push({ pathname: '/artist/[id]', params: { id: artist.id, source: artist.source || 'spotify' } })}
                     >
                       <Image source={{ uri: artist.image || 'https://via.placeholder.com/150' }} style={styles.artistCover} />
                       <Text style={styles.artistName} numberOfLines={1}>{artist.name}</Text>

@@ -1,18 +1,22 @@
+import { trackShareUrl } from '@/lib/share';
 import { Image } from 'expo-image';
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Share, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Share, ActivityIndicator, Platform } from 'react-native';
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import Toast from 'react-native-toast-message';
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { colors, gradients, spacing, borderRadius } from "@/theme/colors";
 import { Track, usePlayerStore } from "@/stores/usePlayerStore";
-import { Feather } from "@expo/vector-icons";
-import { allTracks } from "@/data/mockData";
+
+import { api } from "@/lib/api";
+import { sameTrack } from "@/lib/tracks";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { AddToPlaylistModal } from "./AddToPlaylistModal";
+import { CustomDialog } from "./CustomDialog";
 
 interface TrackRowProps {
   track: Track;
@@ -30,49 +34,32 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
   const toggleDownload = usePlayerStore((s) => s.toggleDownload);
   const downloadedTracks = usePlayerStore((s) => s.downloadedTracks);
 
-  const isCurrentTrack = currentTrack?.id === track.id;
-  const isDownloaded = downloadedTracks.some(t => t.id === track.id);
-  
+  const isCurrentTrack = sameTrack(currentTrack, track);
+  const isDownloaded = downloadedTracks.some(t => sameTrack(t, track));
+
   const [isMenuVisible, setMenuVisible] = React.useState(false);
   const [isDownloading, setIsDownloading] = React.useState(false);
   const [isPlaylistModalVisible, setPlaylistModalVisible] = React.useState(false);
+  const [dialogConfig, setDialogConfig] = React.useState<{ visible: boolean; title: string; message: string; confirmText?: string; isDestructive?: boolean; onConfirm: () => void } | null>(null);
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
-  const handleDownload = () => {
-    if (isDownloaded) {
-      toggleDownload(track);
-    } else {
-      if (!user?.is_premium) {
-        Alert.alert(
-          "Premium Feature",
-          "Downloading tracks is a Premium feature. Upgrade now to listen offline!",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Get Premium", onPress: () => { setMenuVisible(false); router.push("/(premium)"); } }
-          ]
-        );
-        return;
-      }
-
-      setIsDownloading(true);
-      // Simulate download progress
-      setTimeout(() => {
-        toggleDownload(track);
-        setIsDownloading(false);
-      }, 1500);
+  const handleDownload = async () => {
+    if (!isDownloaded && !user?.is_premium) {
+      setDialogConfig({ visible: true, title: 'Premium feature', message: 'An active subscription is required. Purchases are currently unavailable.', confirmText: 'OK', onConfirm: () => setMenuVisible(false) });
+      return;
     }
+    setIsDownloading(true);
+    try { await toggleDownload(track); } finally { setIsDownloading(false); }
   };
 
   const handleShare = async () => {
     setMenuVisible(false);
     try {
-      const shareUrl = Platform.OS === 'web' 
-        ? `https://soundwave.app/track/${track.id}` 
-        : `soundwave://track/${track.id}`;
-        
+      const shareUrl = trackShareUrl(track);
+
       await Share.share({
-        message: `Listen to ${track.name} by ${track.artist_name} on Soundwave! ${Platform.OS === 'web' ? shareUrl : ''}`,
+        message: `Listen to ${track.name} by ${track.artist_name} on Soundwave! ${shareUrl}`,
         url: Platform.OS === 'web' ? undefined : shareUrl,
       });
     } catch (error) {
@@ -99,16 +86,15 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
 
   const playTrack = async () => {
     setTrack(track);
-    if (contextQueue && contextQueue.length > 1) {
+    if (contextQueue && contextQueue.length > 0) {
       setQueue(contextQueue);
     } else {
       // Auto-populate queue with popular tracks so Up Next has content
       try {
-        const { api } = require('@/lib/api');
         const popular = await api.getPopular(20, 0);
         if (popular.length > 0) {
           // Put current track first, then fill with popular tracks (excluding duplicates)
-          const others = popular.filter((t: Track) => t.id !== track.id);
+          const others = popular.filter((t: Track) => !sameTrack(t, track));
           setQueue([track, ...others]);
         } else {
           setQueue([track]);
@@ -158,10 +144,10 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
           {isDownloading ? (
             <ActivityIndicator size="small" color={colors.accentSolid} />
           ) : (
-            <Ionicons 
-              name={isDownloaded ? "cloud-done" : "cloud-download-outline"} 
-              size={18} 
-              color={isDownloaded ? colors.accentSolid : colors.tertiaryLabel} 
+            <Ionicons
+              name={isDownloaded ? "cloud-done" : "cloud-download-outline"}
+              size={18}
+              color={isDownloaded ? colors.accentSolid : colors.tertiaryLabel}
             />
           )}
         </TouchableOpacity>
@@ -210,40 +196,39 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
           </View>
 
           <View style={styles.menuList}>
-            <TouchableOpacity style={styles.menuItem} onPress={() => { 
+            <TouchableOpacity style={styles.menuItem} onPress={() => {
               setMenuVisible(false);
               setTrack(track);
-              const radioQueue = [...allTracks].sort(() => Math.random() - 0.5);
-              setQueue([track, ...radioQueue.filter(t => t.id !== track.id)]);
+              void api.search(track.artist_name).then(data => setQueue([track, ...data.tracks.filter(t => !sameTrack(t, track))]));
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             }}>
               <Ionicons name="radio-outline" size={24} color="#FFF" />
               <Text style={styles.menuItemText}>Start Radio</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => { 
+            <TouchableOpacity style={styles.menuItem} onPress={() => {
               setMenuVisible(false);
               setPlaylistModalVisible(true);
             }}>
               <Feather name="plus-square" size={24} color="#FFF" />
               <Text style={styles.menuItemText}>Add to Playlist</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.menuItem} onPress={() => { 
-              setMenuVisible(false); 
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => {
+              setMenuVisible(false);
               if (track.artist_id) {
-                router.push(`/artist/${track.artist_id}`); 
+                router.push(`/artist/${track.artist_id}?source=${track.source || "jiosaavn"}`);
               } else {
-                Alert.alert("Artist Not Found", "Detailed artist information is not available for this track.");
+                Toast.show({ type: 'error', text1: 'Artist Not Found', text2: 'Detailed artist information is not available.' });
               }
             }}>
               <Ionicons name="person-outline" size={24} color="#FFF" />
               <Text style={styles.menuItemText}>View Artist</Text>
             </TouchableOpacity>
-            
+
             {/* Download */}
-            <TouchableOpacity 
-              style={styles.menuItem} 
+            <TouchableOpacity
+              style={styles.menuItem}
               onPress={() => {
                 handleDownload();
                 if (isDownloaded) setMenuVisible(false);
@@ -264,7 +249,7 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
 
             <TouchableOpacity style={styles.menuItem} onPress={() => {
               setMenuVisible(false);
-              Alert.alert('Song Credits', `Written by: ${track.artist_name}\nProduced by: Soundwave Studios`);
+                Toast.show({ type: 'info', text1: 'Song Credits', text2: `Written by: ${track.artist_name} | Produced by: Soundwave` });
             }}>
               <Ionicons name="information-circle-outline" size={24} color="#FFF" />
               <Text style={styles.menuItemText}>Show Credits</Text>
@@ -274,11 +259,27 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
       </Modal>
       </Animated.View>
 
-      <AddToPlaylistModal 
+      <AddToPlaylistModal
         visible={isPlaylistModalVisible}
         onClose={() => setPlaylistModalVisible(false)}
         track={track}
       />
+
+      {/* Custom Dialog Modal */}
+      {dialogConfig && (
+        <CustomDialog
+          visible={dialogConfig.visible}
+          title={dialogConfig.title}
+          message={dialogConfig.message}
+          confirmText={dialogConfig.confirmText}
+          isDestructive={dialogConfig.isDestructive}
+          onCancel={() => setDialogConfig(null)}
+          onConfirm={() => {
+            setDialogConfig(null);
+            dialogConfig.onConfirm();
+          }}
+        />
+      )}
     </>
   );
 }

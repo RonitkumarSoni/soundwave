@@ -1,70 +1,61 @@
 import { Image } from 'expo-image';
 import React, { useEffect, useState } from 'react';
-import { FlatList, View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { FlatList, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import { Feather, Ionicons } from '@expo/vector-icons';
+
+import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '@/lib/api';
-import { colors, gradients, spacing } from '@/theme/colors';
+import { LoadError } from '@/components/LoadError';
+import { gradients, spacing } from '@/theme/colors';
 import { TrackRow } from '@/components/TrackRow';
 import { PlaylistHeaderSkeleton, TrackRowSkeleton } from '@/components/Skeletons';
 import { usePlayerStore } from '@/stores/usePlayerStore';
 import { useBottomPadding } from '@/hooks/useBottomPadding';
 
 export default function ArtistDetailScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, source = "jiosaavn" } = useLocalSearchParams<{ id: string; source?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
+
   const [artist, setArtist] = useState<any>(null);
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const bottomPadding = useBottomPadding();
 
   const followedArtists = usePlayerStore((s) => s.followedArtists);
   const toggleFollowArtist = usePlayerStore((s) => s.toggleFollowArtist);
 
-  const isFollowed = followedArtists.some((a) => a.id === id);
+  const isFollowed = followedArtists.some((a) => a.id === id && (a.source || "jiosaavn") === source);
 
   useEffect(() => {
-    loadArtistData();
-  }, [id]);
+    let cancelled = false;
+    setLoading(true); setLoadError(false);
+    setArtist(null); setTracks([]);
+    void Promise.all([api.getArtistById(id, source), api.getArtistTracks(id, source)]).then(([details, items]) => {
+      if (cancelled) return;
+      if (!details) throw new Error("Details unavailable");
+      setArtist(details); setTracks(items || []);
+    }).catch(() => { if (!cancelled) setLoadError(true); }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [id, source, attempt]);
 
-  const loadArtistData = async () => {
-    setLoading(true);
-    try {
-      const artistData = await api.getArtistById(id as string);
-      setArtist(artistData);
-      
-      const tracksData = await api.getArtistTracks(id as string);
-      setTracks(tracksData || []);
-      
-      // Fallback: If backend returns nothing or 404, we could try searching for the artist name
-      if (!artistData && !tracksData?.length) {
-        // As a fallback, just fetch random popular for demo
-        const fallback = await api.getPopular(10, 0, 'popularity_week');
-        setTracks(fallback);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (loadError) return <LoadError title="Artist could not load" onRetry={() => setAttempt(value => value + 1)} />;
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
-      <Image 
-        source={{ uri: artist?.image || 'https://via.placeholder.com/300' }} 
-        style={styles.artistImage} 
+      <Image
+        source={{ uri: artist?.image || 'https://via.placeholder.com/300' }}
+        style={styles.artistImage}
       />
       <LinearGradient
         colors={['transparent', 'rgba(10, 5, 20, 0.8)', '#0A0514']}
         style={styles.imageGradient}
       />
-      
+
       <View style={[styles.headerActions, { top: insets.top + spacing.md }]}>
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={24} color="#FFF" />
@@ -74,7 +65,7 @@ export default function ArtistDetailScreen() {
       <View style={styles.artistInfo}>
         <View style={styles.titleRow}>
           <Text style={styles.artistName}>{artist?.name || 'Artist Name'}</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.followButton, isFollowed && styles.followingButton]}
             onPress={() => artist && toggleFollowArtist(artist)}
           >
@@ -148,10 +139,10 @@ const styles = StyleSheet.create({
   artistImage: {
     width: '100%',
     height: '100%',
-    contentFit: 'cover',
+
   },
   imageGradient: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
   },
   headerActions: {
     position: 'absolute',

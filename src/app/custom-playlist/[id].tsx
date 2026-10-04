@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,17 +9,20 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { colors, gradients, spacing, borderRadius } from '@/theme/colors';
 import { TrackRow } from '@/components/TrackRow';
 import { usePlayerStore } from '@/stores/usePlayerStore';
+import { CustomDialog } from '@/components/CustomDialog';
 
 export default function CustomPlaylistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  
+
   const customPlaylists = usePlayerStore(s => s.customPlaylists);
   const deletePlaylist = usePlayerStore(s => s.deletePlaylist);
   const removeTrackFromPlaylist = usePlayerStore(s => s.removeTrackFromPlaylist);
   const setQueue = usePlayerStore(s => s.setQueue);
   const setTrack = usePlayerStore(s => s.setTrack);
+
+  const [dialogConfig, setDialogConfig] = React.useState<{ visible: boolean; title: string; message: string; confirmText?: string; isDestructive?: boolean; onConfirm: () => void } | null>(null);
 
   const playlist = customPlaylists.find(p => p.id === id);
 
@@ -42,21 +45,17 @@ export default function CustomPlaylistScreen() {
   };
 
   const handleDeletePlaylist = () => {
-    Alert.alert(
-      "Delete Playlist",
-      `Are you sure you want to delete "${playlist.name}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
-          style: "destructive",
-          onPress: () => {
-            deletePlaylist(playlist.id);
-            router.back();
-          }
-        }
-      ]
-    );
+    setDialogConfig({
+      visible: true,
+      title: "Delete Playlist",
+      message: `Are you sure you want to delete "${playlist.name}"?`,
+      confirmText: "Delete",
+      isDestructive: true,
+      onConfirm: () => {
+        deletePlaylist(playlist.id);
+        router.back();
+      }
+    });
   };
 
   // Generate a composite image from the first 4 tracks
@@ -119,13 +118,17 @@ export default function CustomPlaylistScreen() {
               <View style={{ flex: 1 }}>
                 <TrackRow track={track} index={index} contextQueue={playlist.tracks} />
               </View>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.removeTrackBtn}
                 onPress={() => {
-                  Alert.alert("Remove Track", `Remove "${track.name}" from playlist?`, [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Remove", style: "destructive", onPress: () => removeTrackFromPlaylist(playlist.id, track.id) }
-                  ]);
+                  setDialogConfig({
+                    visible: true,
+                    title: "Remove Track",
+                    message: `Remove "${track.name}" from playlist?`,
+                    confirmText: "Remove",
+                    isDestructive: true,
+                    onConfirm: () => removeTrackFromPlaylist(playlist.id, track.id, track.source)
+                  });
                 }}
               >
                 <Feather name="minus-circle" size={20} color={colors.secondaryLabel} />
@@ -140,6 +143,22 @@ export default function CustomPlaylistScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Custom Dialog Modal */}
+      {dialogConfig && (
+        <CustomDialog
+          visible={dialogConfig.visible}
+          title={dialogConfig.title}
+          message={dialogConfig.message}
+          confirmText={dialogConfig.confirmText}
+          isDestructive={dialogConfig.isDestructive}
+          onCancel={() => setDialogConfig(null)}
+          onConfirm={() => {
+            setDialogConfig(null);
+            dialogConfig.onConfirm();
+          }}
+        />
+      )}
     </LinearGradient>
   );
 }

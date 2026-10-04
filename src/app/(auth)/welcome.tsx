@@ -1,22 +1,23 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { signInGoogle } from '@/lib/googleSignIn';
+import Toast from 'react-native-toast-message';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, withSequence, withDelay } from 'react-native-reanimated';
-import { colors, typography, spacing, borderRadius } from '@/theme/colors';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import { api } from '@/lib/api';
-import { useAuthStore } from '@/stores/useAuthStore';
-import { auth } from '@/lib/firebase';
-import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, withSequence } from 'react-native-reanimated';
+import { colors, spacing } from '@/theme/colors';
 
-WebBrowser.maybeCompleteAuthSession();
-const { width } = Dimensions.get('window');
+import { useAuthStore } from '@/stores/useAuthStore';
+
+
+
+
+
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const [signingIn, setSigningIn] = useState(false);
   const setAuthData = useAuthStore((s) => s.setAuthData);
 
   // Logo Pulse Animation
@@ -30,37 +31,32 @@ export default function WelcomeScreen() {
       -1,
       true
     );
-  }, []);
+  }, [scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }]
   }));
 
-  // Google Auth
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: '514260576219-em1tjqq13ci3coffqqgkrrcrqie9noor.apps.googleusercontent.com',
-    webClientId: '514260576219-em1tjqq13ci3coffqqgkrrcrqie9noor.apps.googleusercontent.com',
-  });
-
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      handleGoogleLogin(id_token);
-    }
-  }, [response]);
-
-  const handleGoogleLogin = async (idToken: string) => {
+  const handleGoogleLogin = async () => {
+    if (signingIn) return;
+    setSigningIn(true);
     try {
-      const credential = GoogleAuthProvider.credential(idToken);
-      const userCredential = await signInWithCredential(auth, credential);
-      const firebaseIdToken = await userCredential.user.getIdToken();
-      
-      const data = await api.auth.firebaseLogin(firebaseIdToken);
-      await setAuthData(data);
+      const userCredential = await signInGoogle();
+
+      const userProfile = {
+        id: userCredential.user.uid,
+        email: userCredential.user.email || '',
+        display_name: userCredential.user.displayName || 'User',
+        avatar_url: userCredential.user.photoURL || '',
+        is_premium: false,
+        oauth_provider: 'google',
+      };
+
+      await setAuthData(userProfile, userCredential.user);
       router.replace('/(home)');
-    } catch (err: any) {
-      console.error('Google login failed:', err);
-    }
+    } catch {
+      Toast.show({ type: 'error', text1: 'Sign-in failed', text2: 'Please check your connection and try again.' });
+    } finally { setSigningIn(false); }
   };
 
   return (
@@ -88,7 +84,7 @@ export default function WelcomeScreen() {
 
         {/* Action Buttons */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.signupButton}
             onPress={() => router.push('/(auth)/signup')}
             activeOpacity={0.8}
@@ -102,37 +98,19 @@ export default function WelcomeScreen() {
             <Text style={styles.signupButtonText}>Sign up free</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.socialButton}
-            onPress={() => promptAsync()}
-            disabled={!request}
+            disabled={signingIn}
+            onPress={handleGoogleLogin}
             activeOpacity={0.7}
           >
             <Ionicons name="logo-google" size={24} color="#FFF" style={styles.socialIcon} />
-            <Text style={styles.socialButtonText}>Continue with Google</Text>
+            <Text style={styles.socialButtonText}>{signingIn ? 'Signing in…' : 'Continue with Google'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.socialButton}
-            activeOpacity={0.7}
-            onPress={() => {}}
-          >
-            <Ionicons name="logo-facebook" size={24} color="#FFF" style={styles.socialIcon} />
-            <Text style={styles.socialButtonText}>Continue with Facebook</Text>
-          </TouchableOpacity>
-          
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity 
-              style={styles.socialButton}
-              activeOpacity={0.7}
-              onPress={() => {}}
-            >
-              <Ionicons name="logo-apple" size={24} color="#FFF" style={styles.socialIcon} />
-              <Text style={styles.socialButtonText}>Continue with Apple</Text>
-            </TouchableOpacity>
-          )}
 
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.loginLink}
             onPress={() => router.push('/(auth)/login')}
           >

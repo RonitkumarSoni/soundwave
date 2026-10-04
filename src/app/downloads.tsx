@@ -1,17 +1,19 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayerStore } from '@/stores/usePlayerStore';
-import { colors, gradients, spacing } from '@/theme/colors';
+import { gradients, spacing } from '@/theme/colors';
 import { TrackRow } from '@/components/TrackRow';
+import { cancelDownloads } from '@/services/downloadService';
 
 export default function DownloadsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const downloadedTracks = usePlayerStore((s) => s.downloadedTracks);
+  const pending = usePlayerStore(state => state.downloadProgress);
 
   return (
     <View style={styles.container}>
@@ -19,7 +21,7 @@ export default function DownloadsScreen() {
         colors={[gradients.background[0], gradients.background[1], gradients.background[2]]}
         style={StyleSheet.absoluteFill}
       />
-      
+
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <Feather name="chevron-left" size={24} color="#FFF" />
@@ -30,22 +32,15 @@ export default function DownloadsScreen() {
 
       <View style={styles.statsBar}>
         <Text style={styles.statsText}>
-          {downloadedTracks.length} tracks • {downloadedTracks.length * 5} MB
+          {downloadedTracks.length} tracks • {(downloadedTracks.reduce((bytes, track) => bytes + (track.fileSize || 0), 0) / (1024 * 1024)).toFixed(1)} MB
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {downloadedTracks.length > 0 ? (
-          downloadedTracks.map((track, index) => (
-            <TrackRow key={`${track.id}-${index}`} track={track} index={index} contextQueue={downloadedTracks} />
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Feather name="download-cloud" size={48} color="rgba(255,255,255,0.3)" />
-            <Text style={styles.emptyText}>No downloaded tracks yet.</Text>
-          </View>
-        )}
-      </ScrollView>
+      {Object.keys(pending).length > 0 && <TouchableOpacity accessibilityRole="button" onPress={cancelDownloads} style={{ padding: 16, minHeight: 48 }}><Text style={{ color: "#FFF" }}>{Object.keys(pending).length} active download(s) · Cancel</Text></TouchableOpacity>}
+      <FlatList data={downloadedTracks} keyExtractor={track => (track.source || "jamendo") + ":" + track.id} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}
+        renderItem={({ item, index }) => <TrackRow track={item} index={index} contextQueue={downloadedTracks} />}
+        ListEmptyComponent={<View style={styles.emptyState}><Feather name="download-cloud" size={48} color="rgba(255,255,255,0.3)" /><Text style={styles.emptyText}>No downloaded tracks yet.</Text></View>}
+      />
     </View>
   );
 }

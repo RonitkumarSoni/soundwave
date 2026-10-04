@@ -50,7 +50,7 @@ export default function LibraryScreen() {
       } else {
         setTracks([]);
       }
-      
+
       if (activeTab === "Playlists" || activeTab === "All") {
         try {
           const res = await api.playlists.getAll();
@@ -151,22 +151,7 @@ export default function LibraryScreen() {
     }
   };
 
-  const getSortedData = (data: any[]) => {
-    let filtered = data;
-    if (searchQuery.trim().length > 0) {
-      filtered = data.filter(item => {
-        const name = (item.name || item.title || '').toLowerCase();
-        return name.includes(searchQuery.toLowerCase());
-      });
-    }
 
-    if (sortOrder === 'added') return filtered;
-    return [...filtered].sort((a, b) => {
-      const nameA = a.name || a.title || '';
-      const nameB = b.name || b.title || '';
-      return nameA.localeCompare(nameB);
-    });
-  };
 
   return (
     <LinearGradient
@@ -183,8 +168,8 @@ export default function LibraryScreen() {
       >
         <View style={{ position: 'relative' }}>
           <AppHeader mode="plain" title="Your library" />
-          <TouchableOpacity 
-            style={[styles.sortButton, { position: 'absolute', right: spacing.lg, bottom: spacing.md }]} 
+          <TouchableOpacity
+            style={[styles.sortButton, { position: 'absolute', right: spacing.lg, bottom: spacing.md }]}
             onPress={() => setSortOrder(prev => prev === 'added' ? 'az' : 'added')}
           >
             <Ionicons name={sortOrder === 'added' ? 'time-outline' : 'text-outline'} size={18} color={colors.label} />
@@ -232,8 +217,8 @@ export default function LibraryScreen() {
                   </TouchableOpacity>
                 )}
                 {sortedPlaylists.map((playlist) => (
-                  <TouchableOpacity 
-                    key={playlist.id} 
+                  <TouchableOpacity
+                    key={playlist.id}
                     style={styles.playlistItem}
                     onPress={() => router.push(`/playlist/${playlist.id}`)}
                     activeOpacity={0.7}
@@ -242,7 +227,7 @@ export default function LibraryScreen() {
                       <Text style={styles.playlistName}>{playlist.title}</Text>
                       <Text style={styles.playlistSub}>{playlist.track_count || 0} tracks</Text>
                     </View>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={{ padding: spacing.sm }}
                       onPress={() => setOptionsPlaylist(playlist)}
                     >
@@ -250,13 +235,13 @@ export default function LibraryScreen() {
                     </TouchableOpacity>
                   </TouchableOpacity>
                 ))}
-                
+
                 {/* Custom Playlists */}
                 {customPlaylists
                   .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()))
                   .map(cp => (
-                  <TouchableOpacity 
-                    key={cp.id} 
+                  <TouchableOpacity
+                    key={cp.id}
                     style={styles.playlistItem}
                     onPress={() => router.push(`/custom-playlist/${cp.id}`)}
                     activeOpacity={0.7}
@@ -265,7 +250,7 @@ export default function LibraryScreen() {
                       <Text style={styles.playlistName}>{cp.name}</Text>
                       <Text style={styles.playlistSub}>{cp.tracks.length} tracks • Custom</Text>
                     </View>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={{ padding: spacing.sm }}
                       onPress={() => {
                         // TODO options
@@ -279,13 +264,13 @@ export default function LibraryScreen() {
             )}
 
             {(activeTab === "Artists" || activeTab === "All") && sortedArtists.map((artist) => (
-              <TouchableOpacity key={artist.id} style={styles.playlistItem} onPress={() => router.push(`/artist/${artist.id}`)}>
+              <TouchableOpacity key={artist.id} style={styles.playlistItem} onPress={() => router.push({ pathname: '/artist/[id]', params: { id: artist.id, source: artist.source || 'spotify' } })}>
                 <Text style={styles.playlistName}>{artist.name}</Text>
               </TouchableOpacity>
             ))}
 
             {(activeTab === "Albums" || activeTab === "All") && sortedAlbums.map((album) => (
-              <TouchableOpacity key={album.id} style={styles.playlistItem} onPress={() => router.push(`/album/${album.id}`)}>
+              <TouchableOpacity key={album.id} style={styles.playlistItem} onPress={() => router.push({ pathname: '/album/[id]', params: { id: album.id, source: album.source || 'spotify' } })}>
                 <Text style={styles.playlistName}>{album.name}</Text>
               </TouchableOpacity>
             ))}
@@ -297,11 +282,11 @@ export default function LibraryScreen() {
                 ))}
               </View>
             )}
-            
+
             {(activeTab !== "All" && activeTab !== "Playlists" && activeTab !== "Artists" && activeTab !== "Albums" && sortedTracks.length === 0) && (
               <View style={{ alignItems: 'center', marginTop: 40 }}>
                 <Text style={{ color: 'rgba(255,255,255,0.7)' }}>
-                  {activeTab === "Downloads" ? "No downloaded tracks yet." : 
+                  {activeTab === "Downloads" ? "No downloaded tracks yet." :
                    activeTab === "Recently Played" ? "No recently played tracks." : "No liked songs yet."}
                 </Text>
               </View>
@@ -323,15 +308,15 @@ export default function LibraryScreen() {
               autoFocus
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity 
-                style={[styles.modalBtn, { backgroundColor: 'transparent' }]} 
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: 'transparent' }]}
                 onPress={() => setShowCreateModal(false)}
                 disabled={creating}
               >
                 <Text style={[styles.modalBtnText, { color: colors.secondaryLabel }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.modalBtn} 
+              <TouchableOpacity
+                style={styles.modalBtn}
                 onPress={handleCreatePlaylist}
                 disabled={creating || !newPlaylistName.trim()}
               >
@@ -351,7 +336,7 @@ export default function LibraryScreen() {
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setOptionsPlaylist(null)}>
           <View style={[styles.modalContent, { marginTop: 'auto', marginBottom: insets.bottom + spacing.lg }]}>
             <Text style={styles.modalTitle}>{optionsPlaylist?.title}</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.optionRow}
               onPress={() => {
                 setEditPlaylistName(optionsPlaylist?.title || "");
@@ -361,7 +346,7 @@ export default function LibraryScreen() {
               <Ionicons name="pencil-outline" size={24} color={colors.label} />
               <Text style={styles.optionText}>Edit Playlist</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.optionRow}
               onPress={handleDeletePlaylist}
             >
@@ -386,8 +371,8 @@ export default function LibraryScreen() {
               autoFocus
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity 
-                style={[styles.modalBtn, { backgroundColor: 'transparent' }]} 
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: 'transparent' }]}
                 onPress={() => {
                   setShowEditModal(false);
                   setOptionsPlaylist(null);
@@ -396,8 +381,8 @@ export default function LibraryScreen() {
               >
                 <Text style={[styles.modalBtnText, { color: colors.secondaryLabel }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.modalBtn} 
+              <TouchableOpacity
+                style={styles.modalBtn}
                 onPress={handleUpdatePlaylist}
                 disabled={updating || !editPlaylistName.trim()}
               >
@@ -416,6 +401,7 @@ export default function LibraryScreen() {
 }
 
 const styles = StyleSheet.create({
+  section: { paddingHorizontal: spacing.lg, marginBottom: spacing.xl },
   container: {
     flex: 1,
   },

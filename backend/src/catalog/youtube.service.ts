@@ -1,16 +1,17 @@
+import type { YoutubeSong } from './provider-types';
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import YTMusic from 'ytmusic-api';
-import { JamendoTrack, JamendoArtist, JamendoResponse } from '../jamendo/jamendo.service';
+import { JamendoTrack, JamendoResponse } from '../jamendo/jamendo.service';
 
 @Injectable()
 export class YoutubeService {
   private readonly logger = new Logger(YoutubeService.name);
   private ytmusic: YTMusic;
   private isInitialized = false;
+  private initializing: Promise<void> | null = null;
 
   constructor() {
     this.ytmusic = new YTMusic();
-    this.init();
   }
 
   private async init() {
@@ -18,21 +19,35 @@ export class YoutubeService {
       await this.ytmusic.initialize();
       this.isInitialized = true;
       this.logger.log('✅ YouTube Music API initialized.');
-    } catch (e: any) {
-      this.logger.error(`Failed to initialize YTMusic: ${e.message}`);
+    } catch (e) {
+      this.logger.error(
+        `Failed to initialize YTMusic: ${e instanceof Error ? e.message : 'Provider unavailable'}`,
+      );
     }
   }
 
   private async ensureInitialized() {
     if (!this.isInitialized) {
-      await this.init();
+      if (!this.initializing)
+        this.initializing = this.init().finally(() => {
+          this.initializing = null;
+        });
+      await this.initializing;
     }
     if (!this.isInitialized) {
-      throw new HttpException('YouTube Music API not ready', HttpStatus.SERVICE_UNAVAILABLE);
+      throw new HttpException(
+        'YouTube Music API not ready',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
     }
   }
 
-  private formatTrack(track: any): JamendoTrack {
+  async getTrackById(id: string) {
+    await this.ensureInitialized();
+    return this.formatTrack(await this.ytmusic.getSong(id));
+  }
+
+  private formatTrack(track: YoutubeSong): JamendoTrack {
     return {
       id: track.videoId,
       name: track.name,
@@ -44,14 +59,14 @@ export class YoutubeService {
       album_id: track.album?.albumId || '',
       album_image: track.thumbnails?.[track.thumbnails.length - 1]?.url || '',
       image: track.thumbnails?.[track.thumbnails.length - 1]?.url || '',
-      audio: `http://localhost:3001/api/youtube/stream/${track.videoId}`, // Stream proxy
+      audio: `/api/youtube/stream/${track.videoId}`,
       audiodownload: `https://music.youtube.com/watch?v=${track.videoId}`,
       prourl: '',
       shorturl: `https://music.youtube.com/watch?v=${track.videoId}`,
       shareurl: `https://music.youtube.com/watch?v=${track.videoId}`,
       releasedate: '',
       position: 0,
-      source: 'youtube'
+      source: 'youtube',
     } as JamendoTrack & { source: string };
   }
 
@@ -68,15 +83,20 @@ export class YoutubeService {
     };
   }
 
-  async searchTracks(query: string, limit = 20): Promise<JamendoResponse<JamendoTrack>> {
+  async searchTracks(
+    query: string,
+    limit = 20,
+  ): Promise<JamendoResponse<JamendoTrack>> {
     await this.ensureInitialized();
     try {
       const results = await this.ytmusic.searchSongs(query);
       const sliced = results.slice(0, limit);
-      const formatted = sliced.map(t => this.formatTrack(t));
+      const formatted = sliced.map((t) => this.formatTrack(t));
       return this.wrapResponse(formatted, formatted.length);
-    } catch (e: any) {
-      this.logger.error(`YouTube search failed: ${e.message}`);
+    } catch (e) {
+      this.logger.error(
+        `YouTube search failed: ${e instanceof Error ? e.message : 'Provider unavailable'}`,
+      );
       return this.wrapResponse([]);
     }
   }
@@ -84,12 +104,16 @@ export class YoutubeService {
   async getTrendingTracks(limit = 20): Promise<JamendoResponse<JamendoTrack>> {
     await this.ensureInitialized();
     try {
-      const results = await this.ytmusic.searchSongs('Pop Hits 2024');
+      const results = await this.ytmusic.searchSongs(
+        'Pop Hits ' + new Date().getFullYear(),
+      );
       const sliced = results.slice(0, limit);
-      const formatted = sliced.map(t => this.formatTrack(t));
+      const formatted = sliced.map((t) => this.formatTrack(t));
       return this.wrapResponse(formatted, formatted.length);
-    } catch (e: any) {
-      this.logger.error(`YouTube trending failed: ${e.message}`);
+    } catch (e) {
+      this.logger.error(
+        `YouTube trending failed: ${e instanceof Error ? e.message : 'Provider unavailable'}`,
+      );
       return this.wrapResponse([]);
     }
   }

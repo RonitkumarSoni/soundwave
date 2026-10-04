@@ -1,101 +1,55 @@
-import { create } from "zustand";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { api } from "@/lib/api";
-
+import { create } from 'zustand';
+import { User, signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { api } from '@/lib/api';
+import { usePlayerStore } from './usePlayerStore';
+import { useSettingsStore } from './useSettingsStore';
+import { clearGoogleSession } from '@/lib/googleSignIn';
 export interface UserProfile {
-  id: string;
-  email: string;
-  display_name: string;
-  avatar_url: string;
-  is_premium: boolean;
-  oauth_provider: string | null;
+  id: string; email: string; display_name: string; avatar_url: string;
+  is_premium: boolean; oauth_provider: string | null;
 }
-
 interface AuthState {
-  user: UserProfile | null;
-  accessToken: string | null;
-  refreshToken: string | null;
-  isLoggedIn: boolean;
-  isLoading: boolean;
-
-  setAuthData: (data: { user: UserProfile; access_token: string; refresh_token: string }) => Promise<void>;
+  user: UserProfile | null; firebaseUser: User | null; isLoggedIn: boolean; isLoading: boolean;
+  emailVerified: boolean; profileError: string | null;
+  setAuthData: (user: UserProfile, firebaseUser: User) => Promise<void>;
+  syncUser: (user: User | null) => Promise<void>;
   logout: () => Promise<void>;
-  loadFromStorage: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => void;
-  upgradeToPremium: () => Promise<void>;
 }
-
+let sessionRevision = 0;
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
-  accessToken: null,
-  refreshToken: null,
-  isLoggedIn: false,
-  isLoading: true, // true until we load from storage
-
-  setAuthData: async (data) => {
+  user: null, firebaseUser: null, isLoggedIn: false, isLoading: true, emailVerified: false, profileError: null,
+  setAuthData: async (profile, firebaseUser) => { await get().syncUser(firebaseUser); },
+  syncUser: async (firebaseUser) => {
+    const revision = ++sessionRevision;
+    await usePlayerStore.getState().switchAccount(firebaseUser?.uid || null);
+    if (revision !== sessionRevision) return;
+    await useSettingsStore.getState().loadFromStorage();
+    if (revision !== sessionRevision) return;
+    if (!firebaseUser) {
+      set({ user: null, firebaseUser: null, isLoggedIn: false, isLoading: false, emailVerified: false, profileError: null });
+      return;
+    }
+    set({ firebaseUser, isLoggedIn: true, emailVerified: firebaseUser.emailVerified, isLoading: false,
+      user: { id: firebaseUser.uid, email: firebaseUser.email || '', display_name: firebaseUser.displayName || 'User', avatar_url: firebaseUser.photoURL || '', is_premium: false, oauth_provider: firebaseUser.providerData[0]?.providerId || null }, profileError: null });
+    if (!firebaseUser.emailVerified) return;
     try {
-      await AsyncStorage.multiSet([
-        ["access_token", data.access_token],
-        ["refresh_token", data.refresh_token],
-        ["user_profile", JSON.stringify(data.user)],
-      ]);
-      set({
-        user: data.user,
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        isLoggedIn: true,
-      });
-    } catch (e) {
-      console.error("Failed to save auth data", e);
+      const profile = await api.auth.me();
+      if (revision === sessionRevision && auth.currentUser?.uid === firebaseUser.uid) set({ user: profile, profileError: null });
+    } catch {
+      if (revision === sessionRevision) set({ profileError: 'Your account could not sync. Check your connection and try again.' });
     }
   },
-
   logout: async () => {
-    try {
-      await AsyncStorage.multiRemove(["access_token", "refresh_token", "user_profile"]);
-      set({ user: null, accessToken: null, refreshToken: null, isLoggedIn: false });
-    } catch (e) {
-      console.error("Failed to clear auth data", e);
-    }
+    await signOut(auth);
+    ++sessionRevision;
+    set({ user: null, firebaseUser: null, isLoggedIn: false, isLoading: false, emailVerified: false, profileError: null });
+    await get().syncUser(null);
+    await clearGoogleSession().catch(() => {});
   },
-
-  loadFromStorage: async () => {
-    try {
-      const [[, accessToken], [, refreshToken], [, userStr]] = await AsyncStorage.multiGet([
-        "access_token",
-        "refresh_token",
-        "user_profile",
-      ]);
-
-      if (accessToken && userStr) {
-        set({
-          accessToken,
-          refreshToken,
-          user: JSON.parse(userStr),
-          isLoggedIn: true,
-          isLoading: false,
-        });
-      } else {
-        set({ isLoading: false });
-      }
-    } catch (e) {
-      console.error("Failed to load auth data", e);
-      set({ isLoading: false });
-    }
-  },
-
   updateProfile: (profile) => {
-    const { user } = get();
-    if (!user) return;
-    const updatedUser = { ...user, ...profile };
-    AsyncStorage.setItem("user_profile", JSON.stringify(updatedUser)).catch(console.error);
-    set({ user: updatedUser });
-  },
-
-  upgradeToPremium: async () => {
-    const { user, updateProfile } = get();
-    if (!user) return;
-    updateProfile({ is_premium: true });
-    // In a real app, this might sync with a backend endpoint
+    const user = get().user;
+    if (user) set({ user: { ...user, display_name: profile.display_name ?? user.display_name, avatar_url: profile.avatar_url ?? user.avatar_url } });
   },
 }));

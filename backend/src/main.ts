@@ -1,3 +1,5 @@
+import { createProxyMiddleware, type Options } from 'http-proxy-middleware';
+import type { IncomingMessage } from 'node:http';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
@@ -20,9 +22,13 @@ async function bootstrap() {
   if (serviceName === 'gateway' || serviceName === 'monolith') {
     // Enable CORS only on the edge service to prevent duplicate headers
     app.enableCors({
-      origin: true,
+      origin: process.env.CORS_ORIGINS
+        ? process.env.CORS_ORIGINS.split(',')
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : false,
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-      credentials: true,
+      credentials: false,
     });
   }
 
@@ -40,15 +46,19 @@ async function bootstrap() {
   }
 
   if (serviceName === 'gateway') {
-    const { createProxyMiddleware } = require('http-proxy-middleware');
-    const proxyOptions = (port: number) => ({
+    const proxyOptions = (port: number): Options => ({
       target: `http://localhost:${port}`,
       changeOrigin: true,
-      pathRewrite: (path: string, req: any) => req.originalUrl,
+      pathRewrite: (
+        path: string,
+        req: IncomingMessage & { originalUrl?: string },
+      ) => req.originalUrl || path,
     });
-    
+
     app.use('/api/auth', createProxyMiddleware(proxyOptions(3002)));
+    app.use('/api/billing', createProxyMiddleware(proxyOptions(3002)));
     app.use('/api/users', createProxyMiddleware(proxyOptions(3002)));
+    app.use('/api/youtube', createProxyMiddleware(proxyOptions(3003)));
     app.use('/api/catalog', createProxyMiddleware(proxyOptions(3003)));
     app.use('/api/playlists', createProxyMiddleware(proxyOptions(3003)));
     app.use('/api/stream', createProxyMiddleware(proxyOptions(3004)));
@@ -56,7 +66,8 @@ async function bootstrap() {
 
   // Bind to 0.0.0.0 to ensure it's accessible externally (required by Render and Docker)
   await app.listen(port, '0.0.0.0');
-  console.log(`🚀 Soundwave ${serviceName.toUpperCase()} Service API running on http://0.0.0.0:${port}`);
+  console.log(
+    `🚀 Soundwave ${serviceName.toUpperCase()} Service API running on http://0.0.0.0:${port}`,
+  );
 }
-bootstrap();
-
+void bootstrap();

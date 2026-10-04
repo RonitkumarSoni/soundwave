@@ -1,9 +1,9 @@
 import { Image } from 'expo-image';
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Pressable, Modal } from 'react-native';
+import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Pressable, Modal, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { BlurView } from "expo-blur";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { accountStorage as AsyncStorage } from '@/lib/accountStorage';
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, gradients, spacing, borderRadius } from "@/theme/colors";
@@ -93,9 +93,10 @@ export default function SearchScreen() {
   const [results, setResults] = useState<{ tracks: Track[], artists: any[], albums: any[] }>({ tracks: [], artists: [], albums: [] });
   const [activeTab, setActiveTab] = useState("Top");
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const [genreLoading, setGenreLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
   const [showSpotifyImport, setShowSpotifyImport] = useState(false);
   const [spotifyUrl, setSpotifyUrl] = useState("");
   const [spotifyLoading, setSpotifyLoading] = useState(false);
@@ -103,32 +104,11 @@ export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scanAnim = useRef(new Animated.Value(0)).current;
+
+
 
   useEffect(() => {
-    if (showScanner) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(scanAnim, {
-            toValue: 246,
-            duration: 1500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(scanAnim, {
-            toValue: 0,
-            duration: 1500,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    } else {
-      scanAnim.setValue(0);
-    }
-  }, [showScanner]);
-
-  useEffect(() => {
-    if (params.q && params.q !== query) {
+    if (params.q) {
       setQuery(params.q as string);
     }
   }, [params.q]);
@@ -180,52 +160,22 @@ export default function SearchScreen() {
   };
 
   useEffect(() => {
-    if (!query.trim()) {
-      setResults({ tracks: [], artists: [], albums: [] });
-      return;
-    }
-
+    const controller = new AbortController();
+    setSearchError(null);
+    if (!query.trim()) { setResults({ tracks: [], artists: [], albums: [] }); setLoading(false); return; }
     setLoading(true);
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(async () => {
-      const data = await api.search(query);
-      
-      // Sort tracks to ensure the closest matches are at the top
-      if (data.tracks && data.tracks.length > 0) {
-        const qLower = query.toLowerCase();
-        data.tracks.sort((a: Track, b: Track) => {
-          // Add fallback to empty string if title is undefined (or use 'name' if it comes from raw API)
-          const aTitle = (a.title || (a as any).name || "").toLowerCase();
-          const bTitle = (b.title || (b as any).name || "").toLowerCase();
-          
-          // 1. Exact match
-          if (aTitle === qLower && bTitle !== qLower) return -1;
-          if (bTitle === qLower && aTitle !== qLower) return 1;
-          
-          // 2. Starts with query
-          const aStarts = aTitle.startsWith(qLower);
-          const bStarts = bTitle.startsWith(qLower);
-          if (aStarts && !bStarts) return -1;
-          if (bStarts && !aStarts) return 1;
-          
-          // 3. Includes query
-          const aIncludes = aTitle.includes(qLower);
-          const bIncludes = bTitle.includes(qLower);
-          if (aIncludes && !bIncludes) return -1;
-          if (bIncludes && !aIncludes) return 1;
-          
-          return 0;
-        });
-      }
+    const timer = setTimeout(async () => {
+      try {
+        const data = await api.search(query, controller.signal);
+        if (controller.signal.aborted) return;
+        setResults(data);
 
-      setResults(data);
-      setLoading(false);
+      } catch {
+        if (!controller.signal.aborted) { setResults({ tracks: [], artists: [], albums: [] }); setSearchError('Search is taking a break. Please try again.'); }
+      } finally { if (!controller.signal.aborted) setLoading(false); }
     }, 400);
-
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    };
-  }, [query]);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [query, searchAttempt]);
 
   const handleGenrePress = async (genreName: string) => {
     setGenreLoading(true);
@@ -252,12 +202,7 @@ export default function SearchScreen() {
   };
 
   const handleVoiceSearch = () => {
-    setIsListening(true);
-    // Mock speech-to-text delay
-    setTimeout(() => {
-      setIsListening(false);
-      setQuery("Imagine Dragons");
-    }, 2500);
+    Alert.alert("Voice search unavailable", "Type a song or artist in the search field.");
   };
 
   const handleSpotifyImport = async () => {
@@ -266,7 +211,7 @@ export default function SearchScreen() {
     try {
       // 1. Fetch playlist from our backend
       const playlist = await api.importSpotify(spotifyUrl);
-      
+
       if (playlist && playlist.tracks) {
         // 2. We could play them or load them. For now just search the first track to prove it works
         if (playlist.tracks.length > 0) {
@@ -303,7 +248,7 @@ export default function SearchScreen() {
         {/* Search Bar */}
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color={colors.tertiaryLabel} />
-          <TextInput
+          <TextInput autoComplete="off" importantForAutofill="noExcludeDescendants"
             style={[styles.searchInput, { outlineStyle: "none" } as any]}
             placeholder="Songs, artists, or lyrics"
             placeholderTextColor={colors.tertiaryLabel}
@@ -331,7 +276,7 @@ export default function SearchScreen() {
                   color="#1DB954"
                 />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowScanner(true)}>
+              <TouchableOpacity onPress={() => Alert.alert("Code scanning unavailable", "Open a shared song link to listen.")}>
                 <Ionicons
                   name="camera-outline"
                   size={18}
@@ -392,15 +337,15 @@ export default function SearchScreen() {
                     ))}
                   </View>
                 )}
-                
+
                 {(activeTab === "Top" || activeTab === "Artists") && results.artists.length > 0 && (
                   <View style={{ marginTop: activeTab === "Top" ? spacing.xl : 0 }}>
                     {activeTab === "Top" && <Text style={styles.resultLabel}>Artists</Text>}
                     {results.artists.slice(0, activeTab === "Top" ? 5 : 20).map((artist: any) => (
-                      <TouchableOpacity 
-                        key={artist.id} 
+                      <TouchableOpacity
+                        key={artist.id}
                         style={styles.artistRow}
-                        onPress={() => router.push(`/artist/${artist.id}`)}
+                        onPress={() => router.push({ pathname: "/artist/[id]", params: { id: artist.id, source: artist.source || "spotify" } })}
                         activeOpacity={0.7}
                       >
                         <Image source={{ uri: artist.image || 'https://via.placeholder.com/150' }} style={styles.artistImage} />
@@ -414,10 +359,10 @@ export default function SearchScreen() {
                   <View style={{ marginTop: activeTab === "Top" ? spacing.xl : 0 }}>
                     {activeTab === "Top" && <Text style={styles.resultLabel}>Albums</Text>}
                     {results.albums.slice(0, activeTab === "Top" ? 5 : 20).map((album: any) => (
-                      <TouchableOpacity 
-                        key={album.id} 
+                      <TouchableOpacity
+                        key={album.id}
                         style={styles.artistRow}
-                        onPress={() => router.push(`/album/${album.id}`)}
+                        onPress={() => router.push({ pathname: "/album/[id]", params: { id: album.id, source: album.source || "spotify" } })}
                         activeOpacity={0.7}
                       >
                         <Image source={{ uri: album.image || 'https://via.placeholder.com/150' }} style={styles.albumImage} />
@@ -429,7 +374,7 @@ export default function SearchScreen() {
                     ))}
                   </View>
                 )}
-                
+
                 {!loading && results.tracks.length === 0 && results.artists.length === 0 && results.albums.length === 0 && (
                   <View style={styles.emptyState}>
                     <Ionicons
@@ -437,7 +382,8 @@ export default function SearchScreen() {
                       size={48}
                       color={colors.tertiaryLabel}
                     />
-                    <Text style={styles.emptyText}>No results found</Text>
+                    <Text style={styles.emptyText}>{searchError || 'No results found'}</Text>
+                    {searchError && <TouchableOpacity accessibilityRole="button" onPress={() => setSearchAttempt(value => value + 1)} style={{padding:12}}><Text style={{color:colors.label}}>Try again</Text></TouchableOpacity>}
                   </View>
                 )}
               </View>
@@ -454,20 +400,20 @@ export default function SearchScreen() {
                     <Text style={styles.clearText}>Clear all</Text>
                   </TouchableOpacity>
                 </View>
-                <ScrollView 
-                  horizontal 
+                <ScrollView
+                  horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.recentScrollContent}
                 >
                   {recentSearches.map((term, i) => (
                     <View key={i} style={styles.recentChip}>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.recentChipTextContainer}
                         onPress={() => setQuery(term)}
                       >
                         <Text style={styles.recentChipText}>{term}</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.recentChipClose}
                         onPress={() => removeRecentSearch(term)}
                       >
@@ -488,8 +434,8 @@ export default function SearchScreen() {
               <Text style={styles.sectionTitle}>Trending searches</Text>
               <View style={styles.trendingList}>
                 {trendingSearches.map((term, i) => (
-                  <TouchableOpacity 
-                    key={i} 
+                  <TouchableOpacity
+                    key={i}
                     style={styles.trendingItem}
                     onPress={() => setQuery(term)}
                     activeOpacity={0.7}
@@ -527,7 +473,7 @@ export default function SearchScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.modalSubtitle}>Paste a public Spotify playlist or album URL below.</Text>
-            <TextInput
+            <TextInput autoComplete="off" importantForAutofill="noExcludeDescendants"
               style={styles.spotifyInput}
               placeholder="https://open.spotify.com/playlist/..."
               placeholderTextColor={colors.tertiaryLabel}
@@ -536,8 +482,8 @@ export default function SearchScreen() {
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <TouchableOpacity 
-              style={[styles.importButton, (!spotifyUrl.trim() || spotifyLoading) && { opacity: 0.5 }]} 
+            <TouchableOpacity
+              style={[styles.importButton, (!spotifyUrl.trim() || spotifyLoading) && { opacity: 0.5 }]}
               onPress={handleSpotifyImport}
               disabled={!spotifyUrl.trim() || spotifyLoading}
             >
@@ -556,8 +502,8 @@ export default function SearchScreen() {
         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <View style={{
-            width: 120, height: 120, borderRadius: 60, 
-            backgroundColor: 'rgba(255,255,255,0.1)', 
+            width: 120, height: 120, borderRadius: 60,
+            backgroundColor: 'rgba(255,255,255,0.1)',
             justifyContent: 'center', alignItems: 'center',
             marginBottom: spacing.xl,
             borderWidth: 2,
@@ -577,52 +523,7 @@ export default function SearchScreen() {
         </View>
       </Modal>
 
-      {/* QR Scanner Mock Modal */}
-      <Modal
-        visible={showScanner}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowScanner(false)}
-      >
-        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '600', marginBottom: spacing.xl }}>Scan Soundwave Code</Text>
-          
-          <View style={{ 
-            width: 250, height: 250, 
-            borderWidth: 2, borderColor: colors.accentSolid, 
-            borderRadius: borderRadius.lg,
-            backgroundColor: 'rgba(0,0,0,0.3)',
-            justifyContent: 'center', alignItems: 'center',
-            overflow: 'hidden'
-          }}>
-            <Ionicons name="scan-outline" size={80} color="rgba(255,255,255,0.2)" />
-            <Animated.View 
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 2,
-                backgroundColor: colors.accentSolid,
-                shadowColor: colors.accentSolid,
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 1,
-                shadowRadius: 10,
-                transform: [{ translateY: scanAnim }]
-              }}
-            />
-          </View>
-          
-          <Text style={{ color: colors.secondaryLabel, fontSize: 14, marginTop: spacing.lg, textAlign: 'center' }}>
-            Align a QR code or Soundwave code{'\n'}within the frame to scan.
-          </Text>
 
-          <TouchableOpacity onPress={() => setShowScanner(false)} style={{ marginTop: spacing.xxl }}>
-            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 16 }}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
     </LinearGradient>
   );
 }

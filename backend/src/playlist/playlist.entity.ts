@@ -45,6 +45,15 @@ export class PlaylistTrack {
   @Column({ primary: true })
   track_id: string; // Jamendo track ID
 
+  @Column({ default: 'jamendo' })
+  source: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  provider_id: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  metadata: string | null;
+
   @Column()
   position: number;
 

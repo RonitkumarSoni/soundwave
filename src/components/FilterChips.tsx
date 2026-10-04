@@ -1,17 +1,7 @@
-import React, { useRef } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-} from "react-native";
+import React from "react";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import Animated, {
-  FadeIn,
-  FadeOut,
-  LinearTransition,
-} from "react-native-reanimated";
+
 import { colors, gradients, spacing, borderRadius } from "@/theme/colors";
 
 interface FilterChipsProps {
