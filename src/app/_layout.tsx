@@ -43,8 +43,12 @@ export default function RootLayout() {
   const finishSplash = useCallback(() => setIsAnimationComplete(true), []);
   const showCustomSplash = useCallback(() => { void SplashScreen.hideAsync().catch(() => {}); }, []);
 
-  const { isLoggedIn, isLoading, emailVerified, profileError, syncUser } = useAuthStore();
-  const { hasSeenOnboarding } = useSettingsStore();
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const emailVerified = useAuthStore((state) => state.emailVerified);
+  const profileError = useAuthStore((state) => state.profileError);
+  const syncUser = useAuthStore((state) => state.syncUser);
+  const hasSeenOnboarding = useSettingsStore((state) => state.hasSeenOnboarding);
 
 
 
@@ -138,6 +142,7 @@ export default function RootLayout() {
 
   const handleTabChange = useCallback(
     (index: number) => {
+      if (index === activeTab && ['(home)', '(search)', '(library)', '(premium)'].includes(segments[0] || '')) return;
       setActiveTab(index);
       switch (index) {
         case 0:
@@ -154,7 +159,7 @@ export default function RootLayout() {
           break;
       }
     },
-    [router]
+    [router, activeTab, segments]
   );
 
   // Sync activeTab with current segment
@@ -191,7 +196,8 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          animation: 'fade',
+          animation: 'none',
+          freezeOnBlur: true,
         }}
       >
         <Stack.Screen name="(auth)" />
