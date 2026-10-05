@@ -51,6 +51,8 @@ const apiClient = create({
 
 // Interceptor to attach token
 apiClient.interceptors.request.use(async (config) => {
+    // Catalog endpoints are public: a Firebase refresh failure must not block music browsing.
+    if ((config.method || 'get').toLowerCase() === 'get' && /^\/(youtube|catalog)(\/|\?)/.test(config.url || '')) return config;
     const user = auth.currentUser;
     if (user) {
       const token = await user.getIdToken();
@@ -393,14 +395,8 @@ export const api = {
   },
 
   getYoutubeHits: async () => {
-    try {
-      // Calls the new backend YouTube Music service
-      const { data } = await apiClient.get('/youtube/tracks?limit=15');
-      return (data.results || []).map((track: any) => normalizeBackendTrack(track, API_BASE));
-    } catch (error) {
-      console.log('getYoutubeHits API error:', error);
-      return [];
-    }
+    const { data } = await withRetry(() => apiClient.get('/youtube/tracks?limit=15', { timeout: 45000 }), 1, 1000);
+    return (data.results || []).map((track: any) => normalizeBackendTrack(track, API_BASE));
   },
   importSpotify: async (url: string) => {
     try {

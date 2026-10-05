@@ -43,6 +43,8 @@ export default function HomeScreen() {
   const [listData, setListData] = useState<any[]>([]);
   const [previewTracks, setPreviewTracks] = useState<any[]>([]);
   const [youtubeTracks, setYoutubeTracks] = useState<any[]>([]);
+  const [youtubeError, setYoutubeError] = useState(false);
+  const [reload, setReload] = useState(0);
   const [recommendedTracks, setRecommendedTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -125,10 +127,11 @@ export default function HomeScreen() {
       if (!cancelled) { setListData([]); }
     }).finally(() => { if (!cancelled) setLoading(false); });
     void publish(api.getPreviews(), setPreviewTracks).catch(() => {});
-    void publish(api.getYoutubeHits(), setYoutubeTracks).catch(() => {});
+    setYoutubeError(false);
+    void publish(api.getYoutubeHits(), setYoutubeTracks).catch(() => { if (!cancelled) setYoutubeError(true); });
     void publish(api.getPopular(5, 0, "popularity_total", country), setRecommendedTracks).catch(() => {});
     return () => { cancelled = true; };
-  }, [activeFilter, offlineMode, country]);
+  }, [activeFilter, offlineMode, country, reload]);
 
   const renderSkeletons = () => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
@@ -370,6 +373,9 @@ export default function HomeScreen() {
                 </View>
               )}
 
+              {youtubeError && <TouchableOpacity accessibilityRole="button" onPress={() => setReload(value => value + 1)} style={{ padding: spacing.md }}>
+                <Text style={{ color: colors.secondaryLabel }}>YouTube catalog could not connect. Tap to retry.</Text>
+              </TouchableOpacity>}
               {youtubeTracks.length > 0 && (
                 <View style={{ marginBottom: spacing.md }}>
                   <View style={styles.sectionHeader}>
@@ -412,7 +418,7 @@ export default function HomeScreen() {
         </>
       )}
     </View>
-  ), [activeFilter, previewTracks, youtubeTracks, loading, insets.top, recentlyPlayed, downloadedTracks, offlineMode, recommendedTracks, router, setQueue, setTrack]);
+  ), [activeFilter, previewTracks, youtubeTracks, youtubeError, loading, insets.top, recentlyPlayed, downloadedTracks, offlineMode, recommendedTracks, router, setQueue, setTrack]);
 
   const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }: any) => {
     const paddingToBottom = 300;

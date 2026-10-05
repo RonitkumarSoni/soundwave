@@ -4,6 +4,9 @@
   },
   "build": {
     "development": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://soundwave-1-t5o6.onrender.com/api"
+      },
       "developmentClient": true,
       "distribution": "internal"
     },

@@ -3,6 +3,20 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
+test('public YouTube catalog does not depend on Firebase refresh; protected reads still do', async () => {
+  let intercept, refreshes = 0;
+  const api = load('src/lib/api.ts', {
+    './publicData': {}, './jiosaavn': {}, './tracks': load('src/lib/tracks.ts'),
+    './config': { API_BASE: 'https://backend.example/api' },
+    './firebase': { auth: { currentUser: { uid: 'alice', getIdToken: async () => { refreshes++; throw Error('Firebase offline'); } } } },
+    'react-native': { Platform: { OS: 'android' } },
+    axios: { create: () => ({ interceptors: { request: { use: fn => { intercept = fn; } } }, get: async url => { await intercept({ url, method: 'get', headers: {} }); return { data: { results: [] } }; } }) },
+  }).api;
+  await api.getYoutubeHits();
+  assert.equal(refreshes, 0);
+  await assert.rejects(api.auth.me(), /Firebase offline/);
+  assert.equal(refreshes, 1);
+});
 test('notification inbox rejects stale account reads and preserves incoming messages during hydration', async () => {
   let uid = 'alice', finish;
   const store = load('src/stores/useNotificationStore.ts', {
