@@ -33,12 +33,15 @@ async function bootstrap() {
   }
 
   // When deployed, use the PORT env variable provided by the host (e.g. Render)
-  let port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
+  let port = process.env.PORT ? Number(process.env.PORT) : 3001;
   if (!process.env.PORT) {
     if (serviceName === 'auth') port = 3002;
     else if (serviceName === 'catalog') port = 3003;
     else if (serviceName === 'stream') port = 3004;
     else if (serviceName === 'gateway') port = 3001;
+  }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('PORT must be an integer between 1 and 65535');
   }
 
   if (serviceName !== 'gateway') {
@@ -65,9 +68,13 @@ async function bootstrap() {
   }
 
   // Bind to 0.0.0.0 to ensure it's accessible externally (required by Render and Docker)
+  console.log(`Starting HTTP listener on 0.0.0.0:${port}`);
   await app.listen(port, '0.0.0.0');
   console.log(
     `🚀 Soundwave ${serviceName.toUpperCase()} Service API running on http://0.0.0.0:${port}`,
   );
 }
-void bootstrap();
+void bootstrap().catch((error: unknown) => {
+  console.error('Backend startup failed:', error);
+  process.exitCode = 1;
+});
