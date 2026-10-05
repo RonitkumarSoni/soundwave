@@ -1,5 +1,7 @@
 # Soundwave Music App 🎵
 
+[Download the latest Android APK](https://github.com/RonitkumarSoni/soundwave/releases/latest)
+
 ## Repository layout
 
 - The repository root contains the Expo Android/iOS app and its web export.
