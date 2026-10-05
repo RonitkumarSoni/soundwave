@@ -78,7 +78,7 @@ if (serviceName !== 'gateway') {
                 config.get('DATABASE_SSL') === 'false'
                   ? false
                   : {
-                      rejectUnauthorized: true,
+                      rejectUnauthorized: false,
                       ...(config.get('DATABASE_CA')
                         ? {
                             ca: config
