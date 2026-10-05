@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Modal, TextInput, ActivityIndicator, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -14,6 +14,8 @@ import { clearAccountStorage } from '@/lib/accountStorage';
 import { deleteDownload, cancelDownloads } from '@/services/downloadService';
 import Toast from 'react-native-toast-message';
 import { CustomDialog } from '@/components/CustomDialog';
+
+const SUPPORT_EMAIL = 'ronitkumarsoni.cg@gmail.com';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -394,6 +396,21 @@ export default function SettingsScreen() {
         </View>
 
         {/* Account Section */}
+        {renderSectionHeader('Help & Support')}
+        <View style={styles.card}>
+          {renderRow(
+            'mail-outline',
+            'Help & Support',
+            SUPPORT_EMAIL,
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
+            () => {
+              void Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Soundwave%20Support`).catch(() => {
+                Toast.show({ type: 'info', text1: 'Contact support', text2: SUPPORT_EMAIL });
+              });
+            }
+          )}
+        </View>
+
         {renderSectionHeader('Account')}
         <View style={styles.card}>
           {renderRow(

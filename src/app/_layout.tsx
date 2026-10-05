@@ -22,14 +22,15 @@ import { registerPlayback } from "@/services/playbackService";
 import { auth } from "@/lib/firebase";
 import { onIdTokenChanged } from "firebase/auth";
 import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
-import { colors } from "@/theme/colors";
 import { authRedirect } from "@/lib/authRoute";
+import { useAlertTheme } from '@/hooks/useAlertTheme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 registerPlayback();
 
 export default function RootLayout() {
+  const alertTheme = useAlertTheme();
   const insets = useSafeAreaInsets();
   // Initialize audio player
   useAudioPlayer();
@@ -234,19 +235,28 @@ export default function RootLayout() {
           success: (props) => (
             <BaseToast
               {...props}
-              style={{ borderLeftColor: colors.accentSolid, backgroundColor: '#1E1432' }}
+              style={{ borderLeftColor: alertTheme.accent, backgroundColor: alertTheme.background }}
               contentContainerStyle={{ paddingHorizontal: 15 }}
-              text1Style={{ fontSize: 16, fontWeight: '700', color: '#FFF' }}
-              text2Style={{ fontSize: 13, color: '#B9A9D9' }}
+              text1Style={{ fontSize: 16, fontWeight: '700', color: alertTheme.text }}
+              text2Style={{ fontSize: 13, color: alertTheme.secondaryText }}
             />
           ),
           error: (props) => (
             <ErrorToast
               {...props}
-              style={{ borderLeftColor: colors.danger, backgroundColor: '#1E1432' }}
+              style={{ borderLeftColor: alertTheme.danger, backgroundColor: alertTheme.background }}
               contentContainerStyle={{ paddingHorizontal: 15 }}
-              text1Style={{ fontSize: 16, fontWeight: '700', color: '#FFF' }}
-              text2Style={{ fontSize: 13, color: '#B9A9D9' }}
+              text1Style={{ fontSize: 16, fontWeight: '700', color: alertTheme.text }}
+              text2Style={{ fontSize: 13, color: alertTheme.secondaryText }}
+            />
+          ),
+          info: (props) => (
+            <BaseToast
+              {...props}
+              style={{ borderLeftColor: alertTheme.accent, backgroundColor: alertTheme.background }}
+              contentContainerStyle={{ paddingHorizontal: 15 }}
+              text1Style={{ fontSize: 16, fontWeight: '700', color: alertTheme.text }}
+              text2Style={{ fontSize: 13, color: alertTheme.secondaryText }}
             />
           ),
         }}

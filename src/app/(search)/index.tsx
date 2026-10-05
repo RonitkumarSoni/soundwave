@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Pressable, Modal, Alert } from 'react-native';
+import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Pressable, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { BlurView } from "expo-blur";
 import { accountStorage as AsyncStorage } from '@/lib/accountStorage';
@@ -14,6 +14,7 @@ import { FilterChips } from "@/components/FilterChips";
 import { genres, trendingSearches } from "@/data/mockData";
 import { api } from "@/lib/api";
 import { Track, usePlayerStore } from "@/stores/usePlayerStore";
+import { CustomDialog } from '@/components/CustomDialog';
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
@@ -94,6 +95,7 @@ export default function SearchScreen() {
   const [activeTab, setActiveTab] = useState("Top");
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ title: string; message: string } | null>(null);
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [genreLoading, setGenreLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -202,7 +204,7 @@ export default function SearchScreen() {
   };
 
   const handleVoiceSearch = () => {
-    Alert.alert("Voice search unavailable", "Type a song or artist in the search field.");
+    setNotice({ title: 'Voice search unavailable', message: 'Type a song or artist in the search field.' });
   };
 
   const handleSpotifyImport = async () => {
@@ -276,7 +278,7 @@ export default function SearchScreen() {
                   color="#1DB954"
                 />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => Alert.alert("Code scanning unavailable", "Open a shared song link to listen.")}>
+              <TouchableOpacity onPress={() => setNotice({ title: 'Code scanning unavailable', message: 'Open a shared song link to listen.' })}>
                 <Ionicons
                   name="camera-outline"
                   size={18}
@@ -463,6 +465,15 @@ export default function SearchScreen() {
       </ScrollView>
 
       {/* Spotify Import Modal */}
+      {notice && <CustomDialog
+        visible
+        title={notice.title}
+        message={notice.message}
+        onCancel={() => setNotice(null)}
+        onConfirm={() => setNotice(null)}
+        confirmText="OK"
+        showCancel={false}
+      />}
       <Modal visible={showSpotifyImport} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <BlurView intensity={100} tint="dark" style={styles.modalContent}>

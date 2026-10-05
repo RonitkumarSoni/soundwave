@@ -3,6 +3,7 @@ import { Modal, View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing } from "@/theme/colors";
+import { useAlertTheme } from '@/hooks/useAlertTheme';
 
 interface CustomDialogProps {
   visible: boolean;
@@ -13,6 +14,7 @@ interface CustomDialogProps {
   confirmText?: string;
   cancelText?: string;
   isDestructive?: boolean;
+  showCancel?: boolean;
 }
 
 export function CustomDialog({
@@ -24,7 +26,9 @@ export function CustomDialog({
   confirmText = "Confirm",
   cancelText = "Cancel",
   isDestructive = false,
+  showCancel = true,
 }: CustomDialogProps) {
+  const theme = useAlertTheme();
   return (
     <Modal
       transparent
@@ -32,25 +36,25 @@ export function CustomDialog({
       animationType="fade"
       onRequestClose={onCancel}
     >
-      <BlurView intensity={40} tint="dark" style={styles.overlay}>
-        <View style={styles.dialogContainer}>
-          <View style={styles.iconContainer}>
+      <BlurView intensity={40} tint={theme.isDark ? 'dark' : 'light'} style={styles.overlay}>
+        <View style={[styles.dialogContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          <View style={[styles.iconContainer, { backgroundColor: theme.button }]}>
             <Ionicons
               name={isDestructive ? "warning" : "information-circle"}
               size={32}
-              color={isDestructive ? colors.danger : colors.accentSolid}
+              color={isDestructive ? theme.danger : theme.accent}
             />
           </View>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
+          <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+          <Text style={[styles.message, { color: theme.secondaryText }]}>{message}</Text>
           <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.cancelButton}
+            {showCancel && <TouchableOpacity
+              style={[styles.cancelButton, { backgroundColor: theme.button }]}
               onPress={onCancel}
               activeOpacity={0.7}
             >
-              <Text style={styles.cancelText}>{cancelText}</Text>
-            </TouchableOpacity>
+              <Text style={[styles.cancelText, { color: theme.text }]}>{cancelText}</Text>
+            </TouchableOpacity>}
             <TouchableOpacity
               style={[
                 styles.confirmButton,
@@ -65,7 +69,7 @@ export function CustomDialog({
               <Text
                 style={[
                   styles.confirmText,
-                  isDestructive && { color: colors.danger },
+                  { color: isDestructive ? theme.danger : theme.accent },
                 ]}
               >
                 {confirmText}
