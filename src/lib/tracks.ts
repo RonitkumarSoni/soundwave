@@ -14,3 +14,11 @@ export function normalizeTrack(raw: any): Track {
     image: String(raw.image || raw.coverUrl || ''), audio: String(raw.audio || ''), artist_id: raw.artist_id,
   };
 }
+
+export function normalizeBackendTrack(raw: any, apiBase: string): Track {
+  const track = normalizeTrack(raw);
+  if (track.source === 'youtube') {
+    track.audio = `${apiBase.replace(/\/$/, '')}/youtube/stream/${encodeURIComponent(track.id)}`;
+  }
+  return track;
+}

@@ -14,10 +14,16 @@ import { clearAccountStorage } from '@/lib/accountStorage';
 import { deleteDownload, cancelDownloads } from '@/services/downloadService';
 import Toast from 'react-native-toast-message';
 import { CustomDialog } from '@/components/CustomDialog';
+import { auth } from '@/lib/firebase';
+import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { reauthenticateGoogle } from '@/lib/googleSignIn';
+import { useAlertTheme } from '@/hooks/useAlertTheme';
+import { enablePushNotifications, disablePushNotifications } from '@/services/pushNotifications';
 
 const SUPPORT_EMAIL = 'ronitkumarsoni.cg@gmail.com';
 
 export default function SettingsScreen() {
+  const alertTheme = useAlertTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout } = useAuthStore();
@@ -26,6 +32,10 @@ export default function SettingsScreen() {
   const [showEditProfile, setShowEditProfile] = React.useState(false);
   const [editName, setEditName] = React.useState(user?.display_name || '');
   const [updatingProfile, setUpdatingProfile] = React.useState(false);
+  const [showDeletePassword, setShowDeletePassword] = React.useState(false);
+  const [deletePassword, setDeletePassword] = React.useState('');
+  const [deleting, setDeleting] = React.useState(false);
+  const [changingPush, setChangingPush] = React.useState(false);
   const [dialogConfig, setDialogConfig] = React.useState<{ visible: boolean; title: string; message: string; confirmText?: string; isDestructive?: boolean; onConfirm: () => void } | null>(null);
 
 
@@ -40,6 +50,42 @@ export default function SettingsScreen() {
     });
   };
 
+  const completeDeleteAccount = async (password?: string) => {
+    if (deleting) return;
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) {
+      Toast.show({ type: 'error', text1: 'Sign in to delete your account' });
+      return;
+    }
+    setDeleting(true);
+    try {
+      if (firebaseUser.providerData.some(provider => provider.providerId === 'google.com')) {
+        await reauthenticateGoogle(firebaseUser);
+      } else {
+        if (!firebaseUser.email || !password) throw new Error('Enter your password to confirm deletion.');
+        await reauthenticateWithCredential(firebaseUser, EmailAuthProvider.credential(firebaseUser.email, password));
+      }
+      if (auth.currentUser?.uid !== firebaseUser.uid) throw new Error('Account changed. Please retry.');
+      await api.auth.deleteAccount();
+      setShowDeletePassword(false);
+      cancelDownloads();
+      const downloads = usePlayerStore.getState().downloadedTracks;
+      await Promise.allSettled(downloads.map(deleteDownload));
+      await logout();
+      await clearAccountStorage(firebaseUser.uid);
+    } catch (error: any) {
+      const message = error?.code === 'auth/invalid-credential' || error?.code === 'auth/wrong-password'
+        ? 'Incorrect password. Please retry.'
+        : error?.code === 'auth/user-mismatch' ? 'Choose the Google account you are currently signed in with.'
+        : error?.response?.status === 401 ? 'Your sign-in could not be verified by the backend. Check Firebase project configuration.'
+        : 'Deletion could not finish. Check your connection and retry.';
+      Toast.show({ type: 'error', text1: 'Account deletion failed', text2: message });
+    } finally {
+      setDeleting(false);
+      setDeletePassword('');
+    }
+  };
+
   const handleDeleteAccount = () => {
     setDialogConfig({
       visible: true,
@@ -47,17 +93,11 @@ export default function SettingsScreen() {
       message: 'Are you sure you want to permanently delete your account? This action cannot be undone.',
       confirmText: 'Delete',
       isDestructive: true,
-      onConfirm: async () => {
-        const uid = useAuthStore.getState().firebaseUser?.uid;
-        try {
-          await api.auth.deleteAccount();
-          cancelDownloads();
-          const downloads = usePlayerStore.getState().downloadedTracks;
-          await Promise.allSettled(downloads.map(deleteDownload));
-          await logout();
-          if (uid) await clearAccountStorage(uid);
-        } catch (error: any) {
-          Toast.show({ type: "error", text1: "Account deletion failed", text2: error?.response?.status === 401 ? "Sign out and sign in again, then retry deletion." : "Check your connection and retry." });
+      onConfirm: () => {
+        if (auth.currentUser?.providerData.some(provider => provider.providerId === 'google.com')) {
+          void completeDeleteAccount();
+        } else {
+          setShowDeletePassword(true);
         }
       }
     });
@@ -90,7 +130,7 @@ export default function SettingsScreen() {
     onPress?: () => void,
     destructive?: boolean
   ) => {
-    const unsupported = ["Gapless Playback", "Crossfade", "Normalize Volume", "Push Notifications", "New Music Alerts", "Theme", "Language", "Car Mode"].includes(title);
+    const unsupported = ["Gapless Playback", "Crossfade", "Normalize Volume", "New Music Alerts", "Theme", "Language", "Car Mode"].includes(title);
     if (unsupported) { subtitle = "Currently unavailable"; trailing = undefined; onPress = undefined; }
     const content = (
       <View style={styles.row}>
@@ -217,7 +257,16 @@ export default function SettingsScreen() {
             undefined,
             <Switch
               value={settings.pushNotifications}
-              onValueChange={(v) => settings.updateSetting('pushNotifications', v)}
+              disabled={changingPush}
+              onValueChange={async value => {
+                setChangingPush(true);
+                try {
+                  if (value) await enablePushNotifications(); else await disablePushNotifications();
+                  settings.updateSetting('pushNotifications', value);
+                } catch (error) {
+                  Toast.show({ type: 'error', text1: 'Notifications could not update', text2: error instanceof Error ? error.message : 'Please retry.' });
+                } finally { setChangingPush(false); }
+              }}
               trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.accentStart }}
             />
           )}
@@ -434,6 +483,19 @@ export default function SettingsScreen() {
       </ScrollView>
 
       {/* Custom Dialog Modal */}
+      <Modal visible={showDeletePassword} transparent animationType="fade" onRequestClose={() => { if (!deleting) { setShowDeletePassword(false); setDeletePassword(''); } }}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: alertTheme.background }]}>
+            <Text style={[styles.modalTitle, { color: alertTheme.text }]}>Confirm account deletion</Text>
+            <Text style={{ color: alertTheme.secondaryText, marginBottom: 12 }}>Enter your password to verify this is your account.</Text>
+            <TextInput secureTextEntry autoCapitalize="none" autoCorrect={false} value={deletePassword} onChangeText={setDeletePassword} placeholder="Password" placeholderTextColor={alertTheme.secondaryText} style={[styles.modalInput, { color: alertTheme.text, backgroundColor: alertTheme.button }]} />
+            <View style={styles.modalActions}>
+              <TouchableOpacity disabled={deleting} style={styles.modalBtn} onPress={() => { setShowDeletePassword(false); setDeletePassword(''); }}><Text style={styles.modalBtnText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity disabled={deleting || !deletePassword} style={styles.modalBtn} onPress={() => { void completeDeleteAccount(deletePassword); }}>{deleting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.modalBtnText}>Delete account</Text>}</TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       {dialogConfig && (
         <CustomDialog
           visible={dialogConfig.visible}

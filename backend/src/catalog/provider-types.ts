@@ -38,6 +38,7 @@ export interface YoutubeSong {
   name: string;
   duration?: number | null;
   artists?: { artistId?: string | null; name: string }[];
+  artist?: { artistId?: string | null; name: string };
   album?: { name: string; albumId?: string | null } | null;
   thumbnails?: { url: string }[];
 }

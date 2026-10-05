@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { usePlayerStore } from './usePlayerStore';
 import { useSettingsStore } from './useSettingsStore';
 import { clearGoogleSession } from '@/lib/googleSignIn';
+import { disablePushNotifications } from '@/services/pushNotifications';
 export interface UserProfile {
   id: string; email: string; display_name: string; avatar_url: string;
   is_premium: boolean; oauth_provider: string | null;
@@ -42,6 +43,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
   logout: async () => {
+    await disablePushNotifications().catch(() => {});
     await signOut(auth);
     ++sessionRevision;
     set({ user: null, firebaseUser: null, isLoggedIn: false, isLoading: false, emailVerified: false, profileError: null });

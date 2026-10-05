@@ -19,6 +19,8 @@ import { TestBilling1790812800001 } from './migrations/1790812800001-TestBilling
 import { PaymentOrder } from './billing/payment.entity';
 import { BillingModule } from './billing/billing.module';
 import { HealthController } from './health.controller';
+import { DeviceToken } from './notifications/device-token.entity';
+import { NotificationDevices1790812800002 } from './migrations/1790812800002-NotificationDevices';
 
 const configModule = ConfigModule.forRoot({
   isGlobal: true,
@@ -46,11 +48,19 @@ if (serviceName !== 'gateway') {
         )
           throw new Error('DATABASE_URL is required in production');
         const common = {
-          entities: [User, Playlist, PlaylistTrack, LikedTrack, PaymentOrder],
+          entities: [
+            User,
+            Playlist,
+            PlaylistTrack,
+            LikedTrack,
+            PaymentOrder,
+            DeviceToken,
+          ],
           synchronize: false,
           migrations: [
             ApplicationSchema1790812800000,
             TestBilling1790812800001,
+            NotificationDevices1790812800002,
           ],
           migrationsRun: true,
           retryAttempts: 2,

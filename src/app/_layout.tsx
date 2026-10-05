@@ -24,6 +24,8 @@ import { onIdTokenChanged } from "firebase/auth";
 import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
 import { authRedirect } from "@/lib/authRoute";
 import { useAlertTheme } from '@/hooks/useAlertTheme';
+import { useNotificationStore } from '@/stores/useNotificationStore';
+import { listenForPushNotifications, refreshPushRegistration, restorePushNotifications } from '@/services/pushNotifications';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -49,6 +51,15 @@ export default function RootLayout() {
   const profileError = useAuthStore((state) => state.profileError);
   const syncUser = useAuthStore((state) => state.syncUser);
   const hasSeenOnboarding = useSettingsStore((state) => state.hasSeenOnboarding);
+  const firebaseUid = useAuthStore((state) => state.firebaseUser?.uid || null);
+  const pushEnabled = useSettingsStore((state) => state.pushNotifications);
+  React.useEffect(() => listenForPushNotifications(() => router.navigate('/notifications')), [router]);
+  React.useEffect(() => {
+    void useNotificationStore.getState().load(firebaseUid).then(() => restorePushNotifications(() => router.navigate('/notifications'))).catch(() => {});
+  }, [firebaseUid, router]);
+  React.useEffect(() => {
+    if (firebaseUid && emailVerified && pushEnabled) void refreshPushRegistration().catch(() => {});
+  }, [firebaseUid, emailVerified, pushEnabled]);
 
 
 

@@ -66,6 +66,31 @@ describe('authenticated application boundaries', () => {
   it('rejects an unauthenticated profile read', async () => {
     await request(app.getHttpServer()).get('/api/users/me').expect(401);
   });
+  it('protects push registration and validates device tokens', async () => {
+    await request(app.getHttpServer())
+      .post('/api/notifications/devices')
+      .send({ token: 'a'.repeat(30) })
+      .expect(401);
+    await request(app.getHttpServer())
+      .post('/api/notifications/devices')
+      .set('Authorization', 'Bearer alice')
+      .send({ token: 'short' })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post('/api/notifications/devices')
+      .set('Authorization', 'Bearer alice')
+      .send({ token: 'a'.repeat(30) })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post('/api/notifications/test')
+      .set('Authorization', 'Bearer bob')
+      .expect(503);
+    await request(app.getHttpServer())
+      .delete('/api/notifications/devices')
+      .set('Authorization', 'Bearer alice')
+      .send({ token: 'a'.repeat(30) })
+      .expect(200);
+  });
   it('rejects protected user field assignment and excludes password hash', async () => {
     await request(app.getHttpServer())
       .put('/api/users/me')

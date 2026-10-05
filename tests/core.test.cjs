@@ -3,6 +3,21 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
+test('notification inbox rejects stale account reads and preserves incoming messages during hydration', async () => {
+  let uid = 'alice', finish;
+  const store = load('src/stores/useNotificationStore.ts', {
+    '@/lib/accountStorage': { getStorageAccount: () => uid, accountStorage: { getItem: () => new Promise(resolve => { finish = resolve; }), setItem: async () => {} } },
+  }).useNotificationStore;
+  const pending = store.getState().load('alice');
+  const item = { id: 'new', title: 'Alert', message: 'Hello', receivedAt: 1, read: false };
+  store.getState().receive('alice', item);
+  finish('[]'); await pending;
+  assert.equal(store.getState().items.length, 1);
+  const stale = store.getState().load('alice');
+  uid = 'bob'; await store.getState().load(null);
+  finish(JSON.stringify([item])); await stale;
+  assert.equal(store.getState().items.length, 0);
+});
 function load(file, mocks = {}) {
   const output = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   const module = { exports: {} };
@@ -14,6 +29,15 @@ test('provider IDs remain distinct and local audio takes priority', () => {
   assert.equal(tracks.sameTrack({ id: '1', source: 'youtube' }, { id: '1', source: 'spotify' }), false);
   assert.equal(tracks.audioUri({ localUri: 'file:///music.m4a', audio: 'https://remote.test/audio' }), 'file:///music.m4a');
   assert.equal(tracks.audioUri({ source: 'spotify', audiodownload: 'https://open.spotify.com/track/1' }), '');
+});
+
+test('home YouTube tracks use the deployed stream URL rather than an unplayable relative path', () => {
+  const tracks = load('src/lib/tracks.ts');
+  const raw = { id: 'BGU1YL9LNr4', name: 'Song', source: 'youtube', audio: '/api/youtube/stream/BGU1YL9LNr4' };
+  const normalized = tracks.normalizeBackendTrack(raw, 'https://backend.example/api/');
+  assert.equal(tracks.audioUri(normalized), 'https://backend.example/api/youtube/stream/BGU1YL9LNr4');
+  assert.equal(raw.audio, '/api/youtube/stream/BGU1YL9LNr4');
+  assert.equal(tracks.normalizeBackendTrack({ ...raw, source: 'itunes', audio: 'https://audio.example/preview.m4a' }, 'https://backend.example/api').audio, 'https://audio.example/preview.m4a');
 });
 
 test('notification system intents open the player and preserve normal routes', () => {
@@ -48,6 +72,7 @@ test('logout and cold signed-out hydration reject delayed account responses', as
     './usePlayerStore': { usePlayerStore: { getState: () => ({ switchAccount: async () => {} }) } },
     './useSettingsStore': { useSettingsStore: { getState: () => ({ loadFromStorage: async () => {} }) } },
     '@/lib/googleSignIn': { clearGoogleSession: async () => { googleCleared++; } },
+    '@/services/pushNotifications': { disablePushNotifications: async () => {} },
   }).useAuthStore;
   const pending = store.getState().syncUser(user);
   while (!finishProfile) await new Promise(resolve => setTimeout(resolve, 0));

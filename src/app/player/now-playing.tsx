@@ -1,6 +1,6 @@
 
 import React, { useRef, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, Platform, Modal, ScrollView, PanResponder } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, Platform, Modal, ScrollView, PanResponder, Linking } from "react-native";
 import { Video, ResizeMode } from "expo-av";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -436,7 +436,10 @@ export default function NowPlayingScreen() {
           </View>
         </View>
 
-        {audioError && <Text style={{color:"rgba(255,255,255,0.7)",textAlign:"center",fontSize:12}}>This song is unavailable right now. Try another song.</Text>}
+        {audioError && <View>
+          <Text style={{color:"rgba(255,255,255,0.7)",textAlign:"center",fontSize:12}}>{currentTrack.source === 'youtube' ? 'YouTube could not stream this song from the server.' : 'This song is unavailable right now. Try another audio source.'}</Text>
+          {currentTrack.source === 'youtube' && <TouchableOpacity style={{ padding: 12, alignItems: 'center' }} onPress={() => { void Linking.openURL(`https://www.youtube.com/watch?v=${encodeURIComponent(currentTrack.id)}`).catch(() => {}); }}><Text style={{ color: colors.accentSolid }}>Open in YouTube</Text></TouchableOpacity>}
+        </View>}
         <View style={styles.waveformContainer}>
           <SeekBar
             progress={progress}

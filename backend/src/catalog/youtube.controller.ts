@@ -127,7 +127,7 @@ export class YoutubeController {
       stream.on('error', (err) => {
         console.error(`ytdl stream error for ${id}:`, err);
         if (!res.headersSent) {
-          res.status(500).send('Stream error');
+          res.status(503).send('YouTube audio is unavailable from this server');
         } else {
           res.end();
         }
@@ -141,8 +141,8 @@ export class YoutubeController {
       );
       if (!res.headersSent) {
         throw new HttpException(
-          'Could not start stream',
-          HttpStatus.INTERNAL_SERVER_ERROR,
+          'YouTube audio is unavailable from this server. Open the song in YouTube or choose another audio source.',
+          HttpStatus.SERVICE_UNAVAILABLE,
         );
       }
     }

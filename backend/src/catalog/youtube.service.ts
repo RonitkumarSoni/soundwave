@@ -48,13 +48,14 @@ export class YoutubeService {
   }
 
   private formatTrack(track: YoutubeSong): JamendoTrack {
+    const artist = track.artist || track.artists?.[0];
     return {
       id: track.videoId,
       name: track.name,
       duration: track.duration || 0,
-      artist_id: track.artists?.[0]?.artistId || '',
-      artist_name: track.artists?.[0]?.name || 'Unknown Artist',
-      artist_idstr: track.artists?.[0]?.name || 'Unknown Artist',
+      artist_id: artist?.artistId || '',
+      artist_name: artist?.name || 'Unknown Artist',
+      artist_idstr: artist?.name || 'Unknown Artist',
       album_name: track.album?.name || 'YouTube Single',
       album_id: track.album?.albumId || '',
       album_image: track.thumbnails?.[track.thumbnails.length - 1]?.url || '',

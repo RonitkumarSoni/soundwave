@@ -1,6 +1,6 @@
 import { publicData } from './publicData';
 import { jioTrack } from './jiosaavn';
-import { normalizeTrack } from './tracks';
+import { normalizeTrack, normalizeBackendTrack } from './tracks';
 import axios, { create } from 'axios';
 
 
@@ -51,16 +51,14 @@ const apiClient = create({
 
 // Interceptor to attach token
 apiClient.interceptors.request.use(async (config) => {
-  try {
-    if (auth.currentUser) {
-      const token = await auth.currentUser.getIdToken();
+    const user = auth.currentUser;
+    if (user) {
+      const token = await user.getIdToken();
+      if (auth.currentUser?.uid !== user.uid) throw new Error('Account changed. Please retry.');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
-  } catch (e) {
-    console.warn("Failed to get Firebase token", e);
-  }
   return config;
 });
 
@@ -68,6 +66,11 @@ apiClient.interceptors.request.use(async (config) => {
 // Firebase SDK automatically refreshes ID tokens behind the scenes when auth.currentUser.getIdToken() is called.
 
 export const api = {
+  notifications: {
+    register: async (token: string) => { await apiClient.post('/notifications/devices', { token }); },
+    unregister: async (token: string) => { await apiClient.delete('/notifications/devices', { data: { token } }); },
+    test: async () => { await apiClient.post('/notifications/test'); },
+  },
   auth: {
     me: async () => {
       const { data } = await apiClient.get('/users/me');
@@ -78,6 +81,8 @@ export const api = {
       return data;
     },
     deleteAccount: async () => {
+      if (!auth.currentUser) throw new Error('Sign in before deleting your account.');
+      await auth.currentUser.getIdToken(true);
       const { data } = await apiClient.delete('/auth/account');
       return data;
     }
@@ -391,7 +396,7 @@ export const api = {
     try {
       // Calls the new backend YouTube Music service
       const { data } = await apiClient.get('/youtube/tracks?limit=15');
-      return data.results || [];
+      return (data.results || []).map((track: any) => normalizeBackendTrack(track, API_BASE));
     } catch (error) {
       console.log('getYoutubeHits API error:', error);
       return [];

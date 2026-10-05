@@ -18,7 +18,9 @@ export default function ForgotPasswordScreen() {
   const [alertConfig, setAlertConfig] = useState<{ visible: boolean, title: string, message: string }>({ visible: false, title: '', message: '' });
 
   const handleResetPassword = async () => {
-    if (!email) {
+    if (isLoading) return;
+    const address = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
       if (Platform.OS === 'web') {
         setAlertConfig({ visible: true, title: 'Missing Field', message: 'Please enter your email to receive a reset link.' });
       } else {
@@ -29,15 +31,14 @@ export default function ForgotPasswordScreen() {
 
     setIsLoading(true);
     try {
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, address);
       setIsSent(true);
     } catch (err: any) {
       let errorMsg = 'Unable to send password reset email right now. Please try again later.';
-      if (err.code === 'auth/user-not-found') {
-        errorMsg = 'No account found with this email address.';
-      } else if (err.message) {
-        errorMsg = err.message;
-      }
+      if (err.code === 'auth/invalid-email') errorMsg = 'Enter a valid email address.';
+      else if (err.code === 'auth/network-request-failed') errorMsg = 'Check your internet connection and try again.';
+      else if (err.code === 'auth/too-many-requests') errorMsg = 'Too many attempts. Wait a few minutes and retry.';
+      else if (err.code === 'auth/operation-not-allowed') errorMsg = 'Email/password sign-in must be enabled in Firebase.';
       if (Platform.OS === 'web') {
         setAlertConfig({ visible: true, title: 'Error', message: errorMsg });
       } else {
@@ -72,7 +73,7 @@ export default function ForgotPasswordScreen() {
           <Text style={styles.title}>Reset Password</Text>
           <Text style={styles.subtitle}>
             {isSent
-              ? "We've sent a password reset link to your email."
+              ? "If this email has a password account, check its inbox and spam folder for the reset link. Google accounts can sign in with Google."
               : "Enter your email address and we'll send you a link to reset your password."}
           </Text>
         </View>
