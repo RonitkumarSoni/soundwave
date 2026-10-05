@@ -3,6 +3,23 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
+test('YouTube tracks do not enter the failing native audio proxy queue', async () => {
+  let added = 0, reset = 0;
+  const state = { currentTrack: { id: 'jNQXAC9IVRw', source: 'youtube' }, downloadedTracks: [], queue: [] };
+  const store = { getState: () => state, subscribe: () => () => {}, setState: () => {} };
+  const playback = load('src/services/playbackService.native.ts', {
+    'react-native-track-player': { __esModule: true, default: { setupPlayer: async () => {}, updateOptions: async () => {}, addEventListener: () => {}, reset: async () => { reset++; }, add: async () => { added++; } }, Event: {}, State: {}, Capability: {}, RepeatMode: {}, AppKilledPlaybackBehavior: {} },
+    '@/stores/usePlayerStore': { usePlayerStore: store },
+    '@/stores/useSettingsStore': { useSettingsStore: { subscribe: () => () => {}, getState: () => ({ offlineMode: false }) } },
+    '@/lib/tracks': load('src/lib/tracks.ts'),
+    'react-native': { AppState: { currentState: 'active' } },
+    './previewCache.native': {},
+  });
+  await playback.ensurePlayer();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(reset, 1);
+  assert.equal(added, 0);
+});
 test('public YouTube catalog does not depend on Firebase refresh; protected reads still do', async () => {
   let intercept, refreshes = 0;
   const api = load('src/lib/api.ts', {

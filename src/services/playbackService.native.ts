@@ -82,6 +82,14 @@ async function syncPlayer() {
   const state = usePlayerStore.getState();
   const current = state.currentTrack;
   if (!current) { await TrackPlayer.reset(); queueSignature = ''; return; }
+  const localCurrent = state.downloadedTracks.find(track => sameTrack(track, current))?.localUri || current.localUri;
+  if (current.source === 'youtube' && !localCurrent) {
+    if (queueSignature !== 'youtube-embed') {
+      suppression = true;
+      try { await TrackPlayer.reset(); queueSignature = 'youtube-embed'; } finally { suppression = false; }
+    }
+    return;
+  }
   const previewUri = current.source === 'itunes' ? await previewFile(current) : undefined;
   if (!sameTrack(usePlayerStore.getState().currentTrack, current)) return;
   const base = state.queue.some(t => sameTrack(t, current)) ? state.queue : [current, ...state.queue];
@@ -92,7 +100,7 @@ async function syncPlayer() {
   }).map(t => {
     const local = state.downloadedTracks.find(d => sameTrack(d, t));
     return { ...t, localUri: local?.localUri || t.localUri || (sameTrack(t, current) ? previewUri : undefined) };
-  }).filter(t => audioUri(t) && (!useSettingsStore.getState().offlineMode || t.localUri));
+  }).filter(t => (t.source !== 'youtube' || t.localUri) && audioUri(t) && (!useSettingsStore.getState().offlineMode || t.localUri));
   const selected = tracks.findIndex(t => sameTrack(t, current));
   if (selected < 0) throw new Error('This track has no playable audio for the selected mode.');
   const signature = JSON.stringify(tracks.map(t => [trackKey(t), audioUri(t)]));

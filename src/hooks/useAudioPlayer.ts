@@ -15,6 +15,10 @@ async function syncSound(version: number) {
   const track = state.currentTrack;
   const downloaded = state.downloadedTracks.find(t => sameTrack(t, track));
   const uri = track ? audioUri({ ...track, localUri: downloaded?.localUri || track.localUri }) : '';
+  if (track?.source === 'youtube' && !downloaded?.localUri && !track.localUri) {
+    if (soundInstance) await soundInstance.unloadAsync();
+    soundInstance = null; loadedKey = ''; return;
+  }
   if (!track) {
     if (soundInstance) await soundInstance.unloadAsync();
     soundInstance = null; loadedKey = ''; return;

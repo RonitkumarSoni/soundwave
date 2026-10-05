@@ -16,6 +16,7 @@ import { usePlayerStore } from "@/stores/usePlayerStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { seekGlobalAudio } from "@/hooks/useAudioPlayer";
 import { api } from "@/lib/api";
+import YoutubePlayback from '@/components/YoutubePlayback';
 
 // Helper to get the actual bounded width for Web
 const getAppWidth = () => {
@@ -313,6 +314,8 @@ export default function NowPlayingScreen() {
     ? `${Math.floor(track.duration / 60)}:${String(track.duration % 60).padStart(2, "0")}`
     : "0:00";
 
+
+  if (track.source === 'youtube' && !track.localUri && !downloadedTracks.some(item => item.source === 'youtube' && item.id === track.id && item.localUri)) return <YoutubePlayback key={track.id} track={track} />;
 
   return (
     <View style={styles.container}>
