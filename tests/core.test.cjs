@@ -3,6 +3,24 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
+test('old APKs can load the player route without importing a missing native WebView', () => {
+  let imported = 0;
+  const player = load('src/components/YoutubeEmbed.native.tsx', {
+    'react-native': { Text: 'Text', TurboModuleRegistry: { get: () => null } },
+    '@/lib/config': { API_BASE: 'https://backend.example/api' },
+    'react-native-webview': { get WebView() { imported++; throw Error('Missing native binary'); } },
+  }).default;
+  const result = player({ id: 'jNQXAC9IVRw', onError() {} });
+  assert.equal(imported, 0);
+  assert.equal(result.type, 'Text');
+  const WebView = () => null;
+  const installed = load('src/components/YoutubeEmbed.native.tsx', {
+    'react-native': { Text: 'Text', TurboModuleRegistry: { get: () => ({}) } },
+    '@/lib/config': { API_BASE: 'https://backend.example/api' },
+    'react-native-webview': { WebView },
+  }).default;
+  assert.equal(installed({ id: 'jNQXAC9IVRw', onError() {} }).type, WebView);
+});
 test('YouTube tracks do not enter the failing native audio proxy queue', async () => {
   let added = 0, reset = 0;
   const state = { currentTrack: { id: 'jNQXAC9IVRw', source: 'youtube' }, downloadedTracks: [], queue: [] };
@@ -50,7 +68,7 @@ test('notification inbox rejects stale account reads and preserves incoming mess
   assert.equal(store.getState().items.length, 0);
 });
 function load(file, mocks = {}) {
-  const output = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
+  const output = ts.transpileModule(fs.readFileSync(file, 'utf8'), { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
   const module = { exports: {} };
   vm.runInNewContext(output, { module, exports: module.exports, require: name => name in mocks ? mocks[name] : require(name), console, setTimeout, clearTimeout, URL, URLSearchParams, AbortController });
   return module.exports;
