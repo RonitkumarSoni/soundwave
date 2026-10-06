@@ -56,18 +56,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   resetToDefaults: () => {
-    set(defaultSettings);
-    AsyncStorage.setItem("user_settings", JSON.stringify(defaultSettings)).catch(console.error);
+    const settings = { ...defaultSettings, hasSeenOnboarding: get().hasSeenOnboarding };
+    set(settings);
+    AsyncStorage.setItem("user_settings", JSON.stringify(settings)).catch(console.error);
   },
 
   loadFromStorage: async () => {
     const uid = getStorageAccount();
-    set(defaultSettings);
+    const allowed: Record<string, unknown> = {};
     try {
       const saved = await AsyncStorage.getItem("user_settings");
       if (saved && uid === getStorageAccount()) {
         const parsed = JSON.parse(saved);
-        const allowed: Record<string, unknown> = {};
         for (const [key, initial] of Object.entries(defaultSettings)) {
           const value = parsed?.[key];
           if (typeof value !== typeof initial) continue;
@@ -76,10 +76,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           if (choices[key] && !choices[key].includes(value)) continue;
           allowed[key] = value;
         }
-        set(allowed);
       }
     } catch (e) {
       console.error("Failed to load settings", e);
     }
+    if (uid === getStorageAccount()) set({ ...defaultSettings, ...allowed });
   },
 }));

@@ -33,6 +33,8 @@ export default function ArtistDetailScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    void Promise.resolve().then(() => {
+    if (cancelled) return;
     setLoading(true); setLoadError(false);
     setArtist(null); setTracks([]);
     void Promise.all([api.getArtistById(id, source), api.getArtistTracks(id, source)]).then(([details, items]) => {
@@ -40,6 +42,7 @@ export default function ArtistDetailScreen() {
       if (!details) throw new Error("Details unavailable");
       setArtist(details); setTracks(items || []);
     }).catch(() => { if (!cancelled) setLoadError(true); }).finally(() => { if (!cancelled) setLoading(false); });
+    });
     return () => { cancelled = true; };
   }, [id, source, attempt]);
 
@@ -142,7 +145,7 @@ const styles = StyleSheet.create({
 
   },
   imageGradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   headerActions: {
     position: 'absolute',

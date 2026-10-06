@@ -422,7 +422,7 @@ export default function SettingsScreen() {
           {renderRow(
             'information-circle-outline',
             'About Soundwave',
-            'Version 1.0.0',
+            'Version 1.0.1',
             <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.3)" />,
             () => router.push('/(settings)/about')
           )}

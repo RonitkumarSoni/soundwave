@@ -30,6 +30,7 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
   const setQueue = usePlayerStore((s) => s.setQueue);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isAudioLoading = usePlayerStore((s) => s.isAudioLoading);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const toggleDownload = usePlayerStore((s) => s.toggleDownload);
   const downloadedTracks = usePlayerStore((s) => s.downloadedTracks);
@@ -92,6 +93,7 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
       // Auto-populate queue with popular tracks so Up Next has content
       try {
         const popular = await api.getPopular(20, 0);
+        if (!sameTrack(usePlayerStore.getState().currentTrack, track)) return;
         if (popular.length > 0) {
           // Put current track first, then fill with popular tracks (excluding duplicates)
           const others = popular.filter((t: Track) => !sameTrack(t, track));
@@ -100,7 +102,7 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
           setQueue([track]);
         }
       } catch {
-        setQueue([track]);
+        if (sameTrack(usePlayerStore.getState().currentTrack, track)) setQueue([track]);
       }
     }
   };
@@ -165,12 +167,12 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
             end={{ x: 1, y: 1 }}
             style={styles.playButton}
           >
-            <Ionicons
+            {isCurrentTrack && isAudioLoading ? <ActivityIndicator color="#FFF" /> : (<Ionicons
               name={isCurrentTrack && isPlaying ? "pause" : "play"}
               size={16}
               color={colors.label}
               style={isCurrentTrack && isPlaying ? undefined : { marginLeft: 2 }}
-            />
+            />)}
           </LinearGradient>
         </TouchableOpacity>
       </TouchableOpacity>

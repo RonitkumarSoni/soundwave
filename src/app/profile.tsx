@@ -19,13 +19,8 @@ export default function PublicProfileScreen() {
   const [loading, setLoading] = useState(true);
   const followedArtists = usePlayerStore((s) => s.followedArtists);
 
-  useEffect(() => {
-    loadProfileData();
-  }, []);
-
-  const loadProfileData = async () => {
+  async function loadProfileData() {
     try {
-      setLoading(true);
       const data = await api.playlists.getAll();
       setPlaylists(data || []);
     } catch (e) {
@@ -34,6 +29,9 @@ export default function PublicProfileScreen() {
       setLoading(false);
     }
   };
+  useEffect(() => {
+    void Promise.resolve().then(() => loadProfileData());
+  }, []);
 
   const stats = [
     { label: 'Followers', value: '1,234' },

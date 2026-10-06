@@ -36,7 +36,7 @@ const withRetry = async <T>(fn: () => Promise<T>, retries = 2, delay = 2000): Pr
       return await fn();
     } catch (err: any) {
       const isLastAttempt = i === retries;
-      const isNetworkError = !err.response || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK';
+      const isNetworkError = !err.response || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK' || [502, 503, 504].includes(err.response?.status);
       if (isLastAttempt || !isNetworkError) throw err;
       await new Promise(r => setTimeout(r, delay));
     }
@@ -67,6 +67,8 @@ apiClient.interceptors.request.use(async (config) => {
 // No custom response interceptor needed for refreshing tokens.
 // Firebase SDK automatically refreshes ID tokens behind the scenes when auth.currentUser.getIdToken() is called.
 
+const profileRequests = new Map<string, Promise<any>>();
+const profileCooldowns = new Map<string, { until: number; error: unknown }>();
 export const api = {
   notifications: {
     register: async (token: string) => { await apiClient.post('/notifications/devices', { token }); },
@@ -74,9 +76,36 @@ export const api = {
     test: async () => { await apiClient.post('/notifications/test'); },
   },
   auth: {
-    me: async () => {
-      const { data } = await apiClient.get('/users/me');
-      return data;
+    me: () => {
+      const uid = auth.currentUser?.uid;
+      if (!uid) return Promise.reject(new Error('Sign in to continue.'));
+      const cooldown = profileCooldowns.get(uid);
+      if (cooldown && cooldown.until > Date.now()) return Promise.reject(cooldown.error);
+      profileCooldowns.delete(uid);
+      const pending = profileRequests.get(uid);
+      if (pending) return pending;
+      let refreshed = false;
+      const request = withRetry(async () => {
+        if (auth.currentUser?.uid !== uid) throw new Error('Account changed. Please retry.');
+        try {
+          return (await apiClient.get('/users/me', { timeout: 45000 })).data;
+        } catch (error: any) {
+          if (error.response?.status !== 401 || refreshed || !auth.currentUser || auth.currentUser.uid !== uid) throw error;
+          refreshed = true;
+          await auth.currentUser.getIdToken(true);
+          return (await apiClient.get('/users/me', { timeout: 45000 })).data;
+        }
+      }, 1, 1000).catch(error => {
+        if (error?.response?.status === 429) {
+          const header = error.response.headers?.['retry-after'];
+          const seconds = Number(header);
+          const deadline = Number.isFinite(seconds) && seconds > 0 ? Date.now() + seconds * 1000 : Date.parse(header);
+          profileCooldowns.set(uid, { until: Number.isFinite(deadline) && deadline > Date.now() ? deadline : Date.now() + 60000, error });
+        }
+        throw error;
+      }).finally(() => profileRequests.delete(uid));
+      profileRequests.set(uid, request);
+      return request;
     },
     updateProfile: async (display_name?: string, avatar_url?: string) => {
       const { data } = await apiClient.patch('/auth/profile', { display_name, avatar_url });
@@ -390,7 +419,7 @@ export const api = {
       return tracks;
     } catch (error) {
       console.log('getPreviews API error:', error);
-      return [];
+      throw error;
     }
   },
 

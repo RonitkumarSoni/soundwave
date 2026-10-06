@@ -18,7 +18,6 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { usePlayerStore } from "@/stores/usePlayerStore";
 
-import { registerPlayback } from "@/services/playbackService";
 import { auth } from "@/lib/firebase";
 import { onIdTokenChanged } from "firebase/auth";
 import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
@@ -29,7 +28,6 @@ import { listenForPushNotifications, refreshPushRegistration, restorePushNotific
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-registerPlayback();
 
 export default function RootLayout() {
   const alertTheme = useAlertTheme();
@@ -40,7 +38,8 @@ export default function RootLayout() {
   const segments = useSegments();
   React.useEffect(() => { Keyboard.dismiss(); }, [segments]);
   const [pendingPlay, setPendingPlay] = useState<{ id: string; source: string } | null>(null);
-  const [activeTab, setActiveTab] = useState(0);
+  const activeTab = segments[0] === '(search)' ? 1 : segments[0] === '(library)' ? 2
+    : segments[0] === '(premium)' || segments[0] === '(settings)' ? 3 : 0;
   const [isAnimationComplete, setIsAnimationComplete] = useState(false);
   const finishSplash = useCallback(() => setIsAnimationComplete(true), []);
   const showCustomSplash = useCallback(() => { void SplashScreen.hideAsync().catch(() => {}); }, []);
@@ -51,6 +50,7 @@ export default function RootLayout() {
   const profileError = useAuthStore((state) => state.profileError);
   const syncUser = useAuthStore((state) => state.syncUser);
   const hasSeenOnboarding = useSettingsStore((state) => state.hasSeenOnboarding);
+  const routePending = authRedirect({ isLoggedIn, emailVerified, hasSeenOnboarding }, segments) !== null;
   const firebaseUid = useAuthStore((state) => state.firebaseUser?.uid || null);
   const pushEnabled = useSettingsStore((state) => state.pushNotifications);
   React.useEffect(() => listenForPushNotifications(() => router.navigate('/notifications')), [router]);
@@ -67,7 +67,7 @@ export default function RootLayout() {
   const togglePlay = usePlayerStore((s) => s.togglePlay);
 
   React.useEffect(() => {
-    if (profileError) Toast.show({ type: "error", text1: "Couldn't refresh your account", text2: "Please try again shortly." });
+    if (profileError) Toast.show({ type: "error", text1: "Couldn't refresh your account", text2: profileError });
   }, [profileError]);
 
   // Keyboard shortcuts (web only)
@@ -154,7 +154,6 @@ export default function RootLayout() {
   const handleTabChange = useCallback(
     (index: number) => {
       if (index === activeTab && ['(home)', '(search)', '(library)', '(premium)'].includes(segments[0] || '')) return;
-      setActiveTab(index);
       switch (index) {
         case 0:
           router.navigate("/(home)");
@@ -173,14 +172,6 @@ export default function RootLayout() {
     [router, activeTab, segments]
   );
 
-  // Sync activeTab with current segment
-  React.useEffect(() => {
-    const segment = segments[0];
-    if (segment === '(home)') setActiveTab(0);
-    else if (segment === '(search)') setActiveTab(1);
-    else if (segment === '(library)') setActiveTab(2);
-    else if (segment === '(premium)' || segment === '(settings)') setActiveTab(3);
-  }, [segments]);
 
 
   React.useEffect(() => {
@@ -232,10 +223,10 @@ export default function RootLayout() {
         </>
       )}
 
-      {(isLoading || !isAnimationComplete) && (
-        <View style={[StyleSheet.absoluteFillObject, { zIndex: 100 }]}>
+      {(isLoading || routePending || !isAnimationComplete) && (
+        <View style={[StyleSheet.absoluteFill, { zIndex: 100 }]}>
           <AnimatedSplashScreen
-            ready={!isLoading && authRedirect({ isLoggedIn, emailVerified, hasSeenOnboarding }, segments) === null}
+            ready={!isLoading && !routePending}
             onFinish={finishSplash}
             onLayout={showCustomSplash}
             onRetry={() => { void syncUser(auth.currentUser).catch(error => { console.error('Account restore failed', error); }); }}

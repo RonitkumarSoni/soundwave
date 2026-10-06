@@ -4,12 +4,18 @@ import { CatalogController } from './catalog.controller';
 import { SpotifyService } from './spotify.service';
 import { YoutubeService } from './youtube.service';
 import { YoutubeController } from './youtube.controller';
+import { YoutubeAudioService } from './youtube-audio.service';
 import { GaanaService } from './gaana.service';
 import { JamendoModule } from '../jamendo/jamendo.module';
 
 @Module({
   imports: [ConfigModule, JamendoModule],
   controllers: [CatalogController, YoutubeController],
-  providers: [SpotifyService, YoutubeService, GaanaService],
+  providers: [
+    SpotifyService,
+    YoutubeService,
+    YoutubeAudioService,
+    GaanaService,
+  ],
 })
 export class CatalogModule {}

@@ -3,9 +3,12 @@ import type { IncomingMessage } from 'node:http';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { configureProxy } from './http-proxy';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  configureProxy(app, process.env.RENDER === 'true');
 
   // Global validation pipe
   app.useGlobalPipes(

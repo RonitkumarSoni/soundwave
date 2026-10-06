@@ -42,6 +42,7 @@ example
 /ios
 /android
 backend/.env
+backend/bin/
 .env
 .env.*
 !.env.example

@@ -1,7 +1,7 @@
 
 import React, { useRef, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, Platform, Modal, ScrollView, PanResponder, Linking } from "react-native";
-import { Video, ResizeMode } from "expo-av";
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Image, Platform, Modal, ScrollView, PanResponder, ActivityIndicator } from "react-native";
+import { PlayerCanvas } from '@/components/PlayerCanvas';
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather } from "@expo/vector-icons";
@@ -16,7 +16,6 @@ import { usePlayerStore } from "@/stores/usePlayerStore";
 import { useSettingsStore } from "@/stores/useSettingsStore";
 import { seekGlobalAudio } from "@/hooks/useAudioPlayer";
 import { api } from "@/lib/api";
-import YoutubePlayback from '@/components/YoutubePlayback';
 
 // Helper to get the actual bounded width for Web
 const getAppWidth = () => {
@@ -68,6 +67,7 @@ export default function NowPlayingScreen() {
   const audioError = usePlayerStore((s) => s.audioError);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isAudioLoading = usePlayerStore((s) => s.isAudioLoading);
   const likedTracks = usePlayerStore((s) => s.likedTracks);
   const isShuffled = usePlayerStore((s) => s.isShuffled);
   const repeatMode = usePlayerStore((s) => s.repeatMode);
@@ -111,10 +111,13 @@ export default function NowPlayingScreen() {
   const [addingToPlaylist, setAddingToPlaylist] = useState<string | null>(null);
 
   React.useEffect(() => {
-    setPlainLyrics(null);
-    setSyncedLyrics(null);
-    setTranslatedLyrics(null);
-    setIsTranslated(false);
+    const timer = setTimeout(() => {
+      setPlainLyrics(null);
+      setSyncedLyrics(null);
+      setTranslatedLyrics(null);
+      setIsTranslated(false);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [currentTrack?.id]);
 
   const parseLrc = (lrc: string) => {
@@ -229,7 +232,7 @@ export default function NowPlayingScreen() {
     transform: [{ scale: heartScale.value }],
   }));
 
-  const panResponder = React.useRef(
+  const [panResponder] = useState(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderEnd: (e, gestureState) => {
@@ -244,7 +247,7 @@ export default function NowPlayingScreen() {
         }
       },
     })
-  ).current;
+  );
 
   const lyricsScrollRef = useRef<ScrollView>(null);
   const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
@@ -257,11 +260,12 @@ export default function NowPlayingScreen() {
         return currentMs >= l.time && currentMs < nextTime;
       });
       if (idx !== -1 && idx !== activeLyricIndex) {
-        setActiveLyricIndex(idx);
+        const timer = setTimeout(() => setActiveLyricIndex(idx), 0);
         lyricsScrollRef.current?.scrollTo({
           y: Math.max(0, idx * 56 - 150),
           animated: true,
         });
+        return () => clearTimeout(timer);
       }
     }
   }, [currentMs, syncedLyrics, isLyricsModalVisible, activeLyricIndex]);
@@ -292,9 +296,9 @@ export default function NowPlayingScreen() {
 
   const handleLike = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    heartScale.value = withSpring(1.3, { damping: 5, stiffness: 200 });
+    heartScale.set(withSpring(1.3, { damping: 5, stiffness: 200 }));
     setTimeout(() => {
-      heartScale.value = withSpring(1);
+      heartScale.set(withSpring(1));
     }, 150);
     toggleLike(track);
   };
@@ -315,19 +319,10 @@ export default function NowPlayingScreen() {
     : "0:00";
 
 
-  if (track.source === 'youtube' && !track.localUri && !downloadedTracks.some(item => item.source === 'youtube' && item.id === track.id && item.localUri)) return <YoutubePlayback key={track.id} track={track} />;
-
   return (
     <View style={styles.container}>
       {canvasEnabled ? (
-        <Video
-          source={{ uri: getCanvasForTrack(track.id) }}
-          style={{ position: Platform.OS === 'web' ? 'fixed' as any : 'absolute', top: 0, bottom: 0, left: 0, right: 0, width: "100%", height: "100%" }}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay
-          isLooping
-          isMuted
-        />
+        <PlayerCanvas uri={getCanvasForTrack(track.id)} />
       ) : (
         <Animated.Image
           source={{ uri: track.image }}
@@ -361,7 +356,7 @@ export default function NowPlayingScreen() {
               <Ionicons name="play-skip-back" size={40} color="#FFF" />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); togglePlay(); }} activeOpacity={0.7} style={{ padding: 30, backgroundColor: colors.accentSolid, borderRadius: 60 }}>
-              <Ionicons name={isPlaying ? "pause" : "play"} size={48} color="#FFF" style={{ marginLeft: isPlaying ? 0 : 8 }} />
+              {isAudioLoading ? <ActivityIndicator color="#FFF" /> : (<Ionicons name={isPlaying ? "pause" : "play"} size={48} color="#FFF" style={{ marginLeft: isPlaying ? 0 : 8 }} />)}
             </TouchableOpacity>
             <TouchableOpacity onPress={nextTrack} activeOpacity={0.7} style={{ padding: 20, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 50 }}>
               <Ionicons name="play-skip-forward" size={40} color="#FFF" />
@@ -440,8 +435,8 @@ export default function NowPlayingScreen() {
         </View>
 
         {audioError && <View>
-          <Text style={{color:"rgba(255,255,255,0.7)",textAlign:"center",fontSize:12}}>{currentTrack.source === 'youtube' ? 'YouTube could not stream this song from the server.' : 'This song is unavailable right now. Try another audio source.'}</Text>
-          {currentTrack.source === 'youtube' && <TouchableOpacity style={{ padding: 12, alignItems: 'center' }} onPress={() => { void Linking.openURL(`https://www.youtube.com/watch?v=${encodeURIComponent(currentTrack.id)}`).catch(() => {}); }}><Text style={{ color: colors.accentSolid }}>Open in YouTube</Text></TouchableOpacity>}
+          <Text style={{color:"rgba(255,255,255,0.7)",textAlign:"center",fontSize:12}}>{audioError}</Text>
+          <TouchableOpacity style={{ padding: 12, alignItems: 'center' }} onPress={() => setTrack(currentTrack)}><Text style={{ color: colors.accentSolid }}>Retry playback</Text></TouchableOpacity>
         </View>}
         <View style={styles.waveformContainer}>
           <SeekBar
@@ -477,12 +472,12 @@ export default function NowPlayingScreen() {
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); togglePlay(); }}
             activeOpacity={0.8}
           >
-            <Ionicons
+            {isAudioLoading ? <ActivityIndicator color="#FFF" /> : (<Ionicons
               name={isPlaying ? "pause" : "play"}
               size={30}
               color="#FFF"
               style={isPlaying ? undefined : { marginLeft: 3 }}
-            />
+            />)}
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); nextTrack(); }} activeOpacity={0.7} style={styles.transportButton}>

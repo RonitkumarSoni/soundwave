@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Animated, Text } from 'react-native';
 
 interface IOSLoaderProps {
@@ -9,7 +9,7 @@ interface IOSLoaderProps {
 }
 
 export const IOSLoader: React.FC<IOSLoaderProps> = ({ size = 'small', color = '#999999', style, text }) => {
-  const rotation = useRef(new Animated.Value(0)).current;
+  const [rotation] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     let frame = 0;

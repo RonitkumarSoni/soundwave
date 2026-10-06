@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInUp, FadeOutDown } from "react-native-reanimated";
@@ -12,6 +12,7 @@ export function MiniPlayer() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const audioError = usePlayerStore((s) => s.audioError);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isAudioLoading = usePlayerStore((s) => s.isAudioLoading);
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
   const router = useRouter();
@@ -60,11 +61,11 @@ export function MiniPlayer() {
               style={styles.controlButton}
               activeOpacity={0.7}
             >
-              <Ionicons
+              {isAudioLoading ? <ActivityIndicator color="#FFF" /> : (<Ionicons
                 name={isPlaying ? "pause" : "play"}
                 size={22}
                 color={colors.label}
-              />
+              />)}
             </TouchableOpacity>
 
             <TouchableOpacity

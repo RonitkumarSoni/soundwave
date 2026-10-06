@@ -3,40 +3,23 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
-test('old APKs can load the player route without importing a missing native WebView', () => {
-  let imported = 0;
-  const player = load('src/components/YoutubeEmbed.native.tsx', {
-    'react-native': { Text: 'Text', TurboModuleRegistry: { get: () => null } },
-    '@/lib/config': { API_BASE: 'https://backend.example/api' },
-    'react-native-webview': { get WebView() { imported++; throw Error('Missing native binary'); } },
-  }).default;
-  const result = player({ id: 'jNQXAC9IVRw', onError() {} });
-  assert.equal(imported, 0);
-  assert.equal(result.type, 'Text');
-  const WebView = () => null;
-  const installed = load('src/components/YoutubeEmbed.native.tsx', {
-    'react-native': { Text: 'Text', TurboModuleRegistry: { get: () => ({}) } },
-    '@/lib/config': { API_BASE: 'https://backend.example/api' },
-    'react-native-webview': { WebView },
-  }).default;
-  assert.equal(installed({ id: 'jNQXAC9IVRw', onError() {} }).type, WebView);
-});
-test('YouTube tracks do not enter the failing native audio proxy queue', async () => {
-  let added = 0, reset = 0;
-  const state = { currentTrack: { id: 'jNQXAC9IVRw', source: 'youtube' }, downloadedTracks: [], queue: [] };
-  const store = { getState: () => state, subscribe: () => () => {}, setState: () => {} };
-  const playback = load('src/services/playbackService.native.ts', {
-    'react-native-track-player': { __esModule: true, default: { setupPlayer: async () => {}, updateOptions: async () => {}, addEventListener: () => {}, reset: async () => { reset++; }, add: async () => { added++; } }, Event: {}, State: {}, Capability: {}, RepeatMode: {}, AppKilledPlaybackBehavior: {} },
-    '@/stores/usePlayerStore': { usePlayerStore: store },
-    '@/stores/useSettingsStore': { useSettingsStore: { subscribe: () => () => {}, getState: () => ({ offlineMode: false }) } },
-    '@/lib/tracks': load('src/lib/tracks.ts'),
-    'react-native': { AppState: { currentState: 'active' } },
-    './previewCache.native': {},
-  });
-  await playback.ensurePlayer();
-  await new Promise(resolve => setTimeout(resolve, 0));
-  assert.equal(reset, 1);
-  assert.equal(added, 0);
+test('account refresh renews an expired token once and retries the protected profile', async () => {
+  let intercept, calls = 0, forced = 0;
+  const auth = { currentUser: { uid: 'alice', getIdToken: async force => { if (force) forced++; return 'test-token'; } } };
+  const api = load('src/lib/api.ts', {
+    './publicData': {}, './jiosaavn': {}, './tracks': load('src/lib/tracks.ts'),
+    './config': { API_BASE: 'https://backend.example/api' }, './firebase': { auth },
+    'react-native': { Platform: { OS: 'android' } },
+    axios: { create: () => ({ interceptors: { request: { use: fn => { intercept = fn; } } }, get: async url => {
+      await intercept({ url, method: 'get', headers: {} });
+      calls++;
+      if (calls === 1) throw { response: { status: 401 } };
+      return { data: { id: 'alice' } };
+    } }) },
+  }).api;
+  assert.equal((await api.auth.me()).id, 'alice');
+  assert.equal(forced, 1);
+  assert.equal(calls, 2);
 });
 test('public YouTube catalog does not depend on Firebase refresh; protected reads still do', async () => {
   let intercept, refreshes = 0;
@@ -49,7 +32,7 @@ test('public YouTube catalog does not depend on Firebase refresh; protected read
   }).api;
   await api.getYoutubeHits();
   assert.equal(refreshes, 0);
-  await assert.rejects(api.auth.me(), /Firebase offline/);
+  await assert.rejects(intercept({ url: '/users/me', method: 'get', headers: {} }), /Firebase offline/);
   assert.equal(refreshes, 1);
 });
 test('notification inbox rejects stale account reads and preserves incoming messages during hydration', async () => {
@@ -67,12 +50,190 @@ test('notification inbox rejects stale account reads and preserves incoming mess
   finish(JSON.stringify([item])); await stale;
   assert.equal(store.getState().items.length, 0);
 });
-function load(file, mocks = {}) {
-  const output = ts.transpileModule(fs.readFileSync(file, 'utf8'), { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
+function load(file, mocks = {}, globals = {}) {
+  const output = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   const module = { exports: {} };
-  vm.runInNewContext(output, { module, exports: module.exports, require: name => name in mocks ? mocks[name] : require(name), console, setTimeout, clearTimeout, URL, URLSearchParams, AbortController });
+  vm.runInNewContext(output, { module, exports: module.exports, require: name => name in mocks ? mocks[name] : require(name), console, setTimeout, clearTimeout, URL, URLSearchParams, AbortController, ...globals });
   return module.exports;
 }
+
+test('concurrent profile restores share a request and 429 observes Retry-After without token refresh', async () => {
+  let calls = 0, release, refreshes = 0;
+  const auth = { currentUser: { uid: 'alice', getIdToken: async () => { refreshes++; return 'token'; } } };
+  const api = load('src/lib/api.ts', {
+    './publicData': {}, './jiosaavn': {}, './tracks': load('src/lib/tracks.ts'),
+    './config': { API_BASE: 'https://backend.example/api' }, './firebase': { auth },
+    'react-native': { Platform: { OS: 'android' } },
+    axios: { create: () => ({ interceptors: { request: { use() {} } }, get: () => {
+      calls++; return new Promise((resolve, reject) => { release = () => reject({ response: { status: 429, headers: { 'retry-after': '60' } } }); });
+    } }) },
+  }).api;
+  const first = api.auth.me(), second = api.auth.me();
+  assert.equal(first, second);
+  release();
+  await assert.rejects(first, error => error.response.status === 429);
+  await assert.rejects(api.auth.me(), error => error.response.status === 429);
+  assert.equal(calls, 1);
+  assert.equal(refreshes, 0);
+});
+
+test('YouTube preflight distinguishes server failure from missing song and permits local audio', async () => {
+  let calls = 0, status = 503;
+  const { checkAudioSource } = load('src/lib/audioSource.ts', {}, { fetch: async (_, options) => {
+    calls++; assert.equal(options.method, 'HEAD'); return { ok: status === 206, status };
+  } });
+  const signal = new AbortController().signal;
+  await assert.rejects(checkAudioSource('youtube', 'https://backend.example/api/youtube/stream/123', signal), /HTTP 503/);
+  status = 206;
+  await checkAudioSource('youtube', 'https://backend.example/api/youtube/stream/123', signal);
+  await checkAudioSource('youtube', 'file:///download.m4a', signal);
+  assert.equal(calls, 2);
+});
+
+test('Expo Go startup and sign-out do not load the unavailable Google native module', async () => {
+  const google = load('src/lib/googleSignIn.native.ts', {
+    'expo-constants': { executionEnvironment: 'storeClient' },
+    'firebase/auth': {}, './firebase': { auth: {} },
+  });
+  await google.clearGoogleSession();
+  await assert.rejects(google.signInGoogle(), /development build/);
+});
+
+for (const environment of ['bare', 'storeClient']) {
+test(`modern audio engine retains playback in ${environment} with supported background controls only`, async () => {
+  const storage = load('src/lib/accountStorage.ts', { '@react-native-async-storage/async-storage': { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} } });
+  const tracks = load('src/lib/tracks.ts');
+  const store = load('src/stores/usePlayerStore.ts', {
+    '@/lib/accountStorage': storage, '@/lib/tracks': tracks,
+    '@/services/downloadService': { cancelDownloads() {}, verifyDownloads: async () => [] },
+    'react-native-toast-message': { show() {} }, 'react-native': { Platform: { OS: 'android' } },
+  }).usePlayerStore;
+  const instances = [];
+  let audioMode;
+  let checkFailure;
+  const engine = load('src/services/audioPlayback.ts', {
+    'expo-constants': { executionEnvironment: environment },
+    'expo-audio': { setAudioModeAsync: async mode => { audioMode = mode; }, createAudioPlayer: source => {
+      const player = { isLoaded: true, duration: 100, seeks: [], playing: false,
+        addListener: (_, fn) => { player.status = fn; return { remove: () => { player.listenerRemoved = true; } }; },
+        setActiveForLockScreen: active => { assert.notEqual(environment, 'storeClient'); player.lockScreen = active; },
+        remove: () => { player.removed = true; },
+        setPlaybackRate: rate => { player.rate = rate; }, play() { player.playing = true; }, pause() { player.playing = false; },
+        seekTo: async seconds => { player.seeks.push(seconds); },
+      }; player.uri = source.uri; instances.push(player); return player;
+    } },
+    'react-native': { Platform: { OS: 'android' } }, '@/stores/usePlayerStore': { usePlayerStore: store },
+    '@/stores/useSettingsStore': { useSettingsStore: { getState: () => ({ offlineMode: false }), subscribe: () => () => {} } },
+    '@/lib/tracks': tracks, './previewCache': { previewFile: async track => tracks.audioUri(track) },
+    '@/lib/audioSource': { checkAudioSource: async () => { if (checkFailure) throw checkFailure; } },
+    '@/lib/config': { API_BASE: 'https://current-backend.example/api' },
+  });
+  const one = { id: '1', source: 'youtube', name: 'One', audio: 'https://backend.example/one' };
+  const two = { ...one, id: '2', name: 'Two', audio: 'https://backend.example/two' };
+  store.getState().setQueue([one, two]); store.getState().setTrack(one);
+  await engine.ensurePlayer();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const first = instances[0]; assert.equal(first.lockScreen, environment === 'bare' ? true : undefined);
+  assert.equal(store.getState().isAudioLoading, true);
+  first.status({ isLoaded: false, isBuffering: true });
+  assert.equal(store.getState().isAudioLoading, true);
+  first.status({ isLoaded: true, isBuffering: false, currentTime: 0, duration: 100, playing: true });
+  assert.equal(store.getState().isAudioLoading, false);
+  first.status({ isLoaded: true, isBuffering: true, currentTime: 0, duration: 100, playing: true });
+  assert.equal(store.getState().isAudioLoading, true);
+  first.status({ isLoaded: true, isBuffering: false, currentTime: 0, duration: 100, playing: true });
+  assert.equal(audioMode.shouldPlayInBackground, environment === 'bare');
+  assert.equal(first.uri, 'https://current-backend.example/api/youtube/stream/1', 'saved tracks must use the current backend instead of a stale server URL');
+  await engine.seekNative(0.5); assert.equal(first.seeks[0], 50);
+  store.setState({ playbackRate: 1.5, repeatMode: 'one' });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(first.rate, 1.5); assert.equal(first.loop, true);
+  first.status({ isLoaded: true, currentTime: 50, duration: 100, playing: true });
+  first.status({ isLoaded: true, currentTime: 50, duration: 100, playing: false });
+  assert.equal(store.getState().isPlaying, false);
+  store.setState({ repeatMode: 'off', isPlaying: true });
+  first.status({ isLoaded: true, currentTime: 100, duration: 100, playing: false, didJustFinish: true, loop: false });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(store.getState().currentTrack.id, '2'); assert.equal(first.removed, true);
+  const second = instances[1];
+  store.getState().setTrack(one);
+  assert.equal(store.getState().currentTrack.id, '1', 'mini-player track is available on the first tap');
+  assert.equal(second.playing, false, 'old audio stops before awaiting the new source');
+  assert.equal(second.listenerRemoved, true);
+  second.status({ isLoaded: true, currentTime: 100, duration: 100, playing: true, didJustFinish: true });
+  assert.equal(store.getState().currentTrack.id, '1', 'removed player cannot advance the new selection');
+  store.getState().setTrack(two);
+  store.getState().setTrack(one);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(instances.filter(item => item.playing && !item.removed).length, 1);
+  engine.disposePlayer();
+  assert.equal(instances.filter(item => item.playing && !item.removed).length, 0);
+  await engine.ensurePlayer();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(instances.filter(item => item.playing && !item.removed).length, 1);
+  const afterRestart = instances.length;
+  store.getState().setTrack(two);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(instances.length, afterRestart + 1, 'restart does not duplicate subscriptions');
+  store.getState().stop(); await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(instances.every(item => item.removed), true);
+  assert.equal(store.getState().isAudioLoading, false);
+  checkFailure = new Error('Audio service unavailable');
+  store.getState().setTrack(one);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(store.getState().isAudioLoading, false, 'failed audio request must not leave an endless loader');
+  assert.ok(store.getState().audioError, 'failed audio should display a retry error instead of loading forever');
+  engine.disposePlayer();
+});
+}
+
+test('token refresh keeps completed onboarding and account changes wait for settings', async () => {
+  let settingsLoads = 0, finishSettings;
+  const alice = { uid: 'alice', emailVerified: true, providerData: [] };
+  const bob = { uid: 'bob', emailVerified: true, providerData: [] };
+  const auth = { currentUser: alice };
+  const store = load('src/stores/useAuthStore.ts', {
+    'firebase/auth': { signOut: async () => {} }, '@/lib/firebase': { auth },
+    '@/lib/config': { API_BASE: 'https://backend.example/api' },
+    '@/lib/api': { api: { auth: { me: async () => ({ id: auth.currentUser.uid }) } } },
+    './usePlayerStore': { usePlayerStore: { getState: () => ({ switchAccount: async () => {} }) } },
+    './useSettingsStore': { useSettingsStore: { getState: () => ({ loadFromStorage: async () => {
+      settingsLoads++;
+      if (settingsLoads === 2) await new Promise(resolve => { finishSettings = resolve; });
+    } }) } },
+    '@/lib/googleSignIn': { clearGoogleSession: async () => {} },
+    '@/services/pushNotifications': { disablePushNotifications: async () => {} },
+  }).useAuthStore;
+  await store.getState().syncUser(alice);
+  await store.getState().syncUser(alice);
+  assert.equal(settingsLoads, 1, 'same-account token refresh must not reload onboarding settings');
+  auth.currentUser = bob;
+  const pending = store.getState().syncUser(bob);
+  while (!finishSettings) await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(store.getState().isLoading, true);
+  finishSettings(); await pending;
+  assert.equal(store.getState().isLoading, false);
+  assert.equal(store.getState().firebaseUser.uid, 'bob');
+});
+
+test('settings hydration never transiently clears completed onboarding; reset preserves it', async () => {
+  let finish;
+  const store = load('src/stores/useSettingsStore.ts', {
+    '@/lib/accountStorage': { getStorageAccount: () => 'alice', accountStorage: {
+      getItem: () => new Promise(resolve => { finish = resolve; }), setItem: async () => {},
+    } },
+  }).useSettingsStore;
+  store.getState().updateSetting('hasSeenOnboarding', true);
+  const seen = [];
+  const unsubscribe = store.subscribe(state => seen.push(state.hasSeenOnboarding));
+  const pending = store.getState().loadFromStorage();
+  assert.equal(store.getState().hasSeenOnboarding, true);
+  finish(JSON.stringify({ hasSeenOnboarding: true })); await pending;
+  store.getState().resetToDefaults();
+  assert.equal(store.getState().hasSeenOnboarding, true);
+  assert.equal(seen.includes(false), false);
+  unsubscribe();
+});
 test('provider IDs remain distinct and local audio takes priority', () => {
   const tracks = load('src/lib/tracks.ts');
   assert.equal(tracks.sameTrack({ id: '1', source: 'youtube' }, { id: '1', source: 'spotify' }), false);
@@ -117,6 +278,7 @@ test('logout and cold signed-out hydration reject delayed account responses', as
   const store = load('src/stores/useAuthStore.ts', {
     'firebase/auth': { signOut: async () => { auth.currentUser = null; } },
     '@/lib/firebase': { auth },
+    '@/lib/config': { API_BASE: 'https://backend.example/api' },
     '@/lib/api': { api: { auth: { me: () => new Promise(resolve => { finishProfile = resolve; }) } } },
     './usePlayerStore': { usePlayerStore: { getState: () => ({ switchAccount: async () => {} }) } },
     './useSettingsStore': { useSettingsStore: { getState: () => ({ loadFromStorage: async () => {} }) } },

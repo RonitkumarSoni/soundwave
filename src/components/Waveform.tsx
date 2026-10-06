@@ -18,7 +18,7 @@ export function Waveform({
 }: WaveformProps) {
   const [containerWidth, setContainerWidth] = React.useState(300);
 
-  // Generate random bar heights for visual waveform effect
+  // Keep the decorative waveform stable across renders and app restarts.
   const bars = useMemo(() => {
     const count = 50;
     return Array.from({ length: count }, (_, i) => {
@@ -26,7 +26,7 @@ export function Waveform({
       const normalizedPos = i / count;
       const base = 0.3;
       const peak = Math.sin(normalizedPos * Math.PI) * 0.5;
-      const random = Math.random() * 0.4;
+      const random = ((Math.sin(i * 12.9898) + 1) / 2) * 0.4;
       return Math.min(1, base + peak + random);
     });
   }, []);

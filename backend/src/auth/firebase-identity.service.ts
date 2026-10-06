@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -17,6 +18,7 @@ import { resolve } from 'node:path';
 
 @Injectable()
 export class FirebaseIdentityService {
+  private readonly logger = new Logger(FirebaseIdentityService.name);
   constructor(private readonly config: ConfigService) {}
   get adminAuth() {
     try {
@@ -57,6 +59,26 @@ export class FirebaseIdentityService {
         error instanceof UnauthorizedException
       )
         throw error;
+      const code = (error as { code?: string })?.code;
+      // Never log the token or raw SDK error: either can contain account data.
+      this.logger.warn({
+        event: 'firebase-session-rejected',
+        code: typeof code === 'string' && /^(auth|app)\/[a-z-]+$/.test(code) ? code : 'unknown',
+      });
+      if (
+        code &&
+        [
+          'app/network-error',
+          'app/invalid-credential',
+          'auth/invalid-credential',
+          'auth/insufficient-permission',
+          'auth/internal-error',
+        ].includes(code)
+      ) {
+        throw new ServiceUnavailableException(
+          'Backend authentication service could not verify your session',
+        );
+      }
       throw new UnauthorizedException('Invalid or expired session');
     }
   }

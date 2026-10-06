@@ -33,6 +33,7 @@ interface PlayerState {
   queue: Track[];
   originalQueue: Track[];
   isPlaying: boolean;
+  isAudioLoading: boolean;
   progress: number;
   currentTimeMs: number;
   isShuffled: boolean;
@@ -92,6 +93,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   queue: [],
   originalQueue: [],
   isPlaying: false,
+  isAudioLoading: false,
   progress: 0,
   currentTimeMs: 0,
   isShuffled: false,
@@ -124,13 +126,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   setTrack: (track) => {
-    set({ currentTrack: track, isPlaying: true, progress: 0, currentTimeMs: 0, audioError: null, playbackRevision: get().playbackRevision + 1 });
+    set({ currentTrack: track, isPlaying: true, isAudioLoading: true, progress: 0, currentTimeMs: 0, audioError: null, playbackRevision: get().playbackRevision + 1 });
     get().addToRecentlyPlayed(track);
   },
   togglePlay: () => set((s) => ({ isPlaying: !s.isPlaying, audioError: null })),
   play: () => set({ isPlaying: true }),
   pause: () => set({ isPlaying: false }),
-  stop: () => set({ currentTrack: null, isPlaying: false, progress: 0, currentTimeMs: 0 }),
+  stop: () => set({ currentTrack: null, isPlaying: false, isAudioLoading: false, progress: 0, currentTimeMs: 0, audioError: null }),
   setProgress: (progress) => set({ progress }),
   setCurrentTime: (ms) => set({ currentTimeMs: ms }),
   updateProgress: (time, progress) => set({ currentTimeMs: time, progress: progress }),

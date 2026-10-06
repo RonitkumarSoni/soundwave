@@ -12,10 +12,8 @@ export const PasswordStrengthBar = ({ password }: Props) => {
   const hasMinLength = password.length >= 8;
   const hasLetterAndNumber = /(?=.*[a-zA-Z])(?=.*[0-9])/.test(password);
 
-  let strength = 0;
-  if (password.length > 0) strength = 1; // Weak
-  if (hasMinLength || hasLetterAndNumber) strength = 2; // Fair
-  if (hasMinLength && hasLetterAndNumber) strength = 3; // Strong
+  const strength = hasMinLength && hasLetterAndNumber ? 3
+    : hasMinLength || hasLetterAndNumber ? 2 : password.length > 0 ? 1 : 0;
 
   const barColor = useMemo(() => {
     if (strength === 1) return colors.danger || '#FF4B4B'; // Red

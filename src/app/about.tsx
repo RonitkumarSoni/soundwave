@@ -33,7 +33,7 @@ export default function AboutScreen() {
             <Feather name="music" size={48} color={colors.accentSolid} />
           </View>
           <Text style={styles.appName}>Soundwave</Text>
-          <Text style={styles.versionText}>Version 1.0.0 (Build 42)</Text>
+          <Text style={styles.versionText}>Version 1.0.1 (Build 2)</Text>
         </View>
 
         <View style={styles.section}>

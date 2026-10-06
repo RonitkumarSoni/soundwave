@@ -1,6 +1,7 @@
 import type { YoutubeSong } from './provider-types';
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import YTMusic from 'ytmusic-api';
+import { YoutubeAudioService } from './youtube-audio.service';
 import { JamendoTrack, JamendoResponse } from '../jamendo/jamendo.service';
 
 @Injectable()
@@ -10,7 +11,7 @@ export class YoutubeService {
   private isInitialized = false;
   private initializing: Promise<void> | null = null;
 
-  constructor() {
+  constructor(private readonly audio: YoutubeAudioService) {
     this.ytmusic = new YTMusic();
   }
 
@@ -88,6 +89,12 @@ export class YoutubeService {
     query: string,
     limit = 20,
   ): Promise<JamendoResponse<JamendoTrack>> {
+    if (/\bpodcast\b/i.test(query)) {
+      const podcasts = await this.audio.searchPodcasts(query, limit);
+      return this.wrapResponse(
+        podcasts.map((track) => this.formatTrack(track)),
+      );
+    }
     await this.ensureInitialized();
     try {
       const results = await this.ytmusic.searchSongs(query);

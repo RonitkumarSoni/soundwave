@@ -2,8 +2,8 @@
   "expo": {
     "name": "soundwave",
     "slug": "soundwave",
-    "version": "1.0.0",
-    "newArchEnabled": false,
+    "version": "1.0.1",
+    "newArchEnabled": true,
     "orientation": "portrait",
     "icon": "./assets/images/soundwave-logo-v2.png",
     "scheme": "soundwave",
@@ -35,7 +35,8 @@
         "WAKE_LOCK",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_MEDIA_PLAYBACK"
-      ]
+      ],
+      "versionCode": 2
     },
     "web": {
       "output": "static",
@@ -53,9 +54,17 @@
         }
       ],
       "expo-file-system",
-      "expo-av",
       "@react-native-google-signin/google-signin",
-      "./plugins/withNoAutofill"
+      "./plugins/withNoAutofill",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": true
+        }
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true,

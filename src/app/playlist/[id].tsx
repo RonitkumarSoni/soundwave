@@ -34,10 +34,13 @@ export default function PlaylistDetailScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    void Promise.resolve().then(() => {
+    if (cancelled) return;
     setLoading(true); setLoadError(false); setPlaylist(null);
     void api.playlists.getById(String(id)).then(data => { if (!cancelled) setPlaylist(data); })
       .catch(() => { if (!cancelled) setLoadError(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
+    });
     return () => { cancelled = true; };
   }, [id, attempt]);
 

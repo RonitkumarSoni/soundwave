@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Animated, Pressable, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { BlurView } from "expo-blur";
@@ -19,7 +19,7 @@ import { CustomDialog } from '@/components/CustomDialog';
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 function AnimatedGenreCard({ genre, onPress }: { genre: any; onPress: (name: string) => void }) {
-  const hoverAnim = useRef(new Animated.Value(0)).current;
+  const [hoverAnim] = useState(() => new Animated.Value(0));
 
   const handleHoverIn = () => {
     Animated.spring(hoverAnim, {
@@ -110,16 +110,12 @@ export default function SearchScreen() {
 
 
   useEffect(() => {
-    if (params.q) {
-      setQuery(params.q as string);
-    }
+    if (!params.q) return;
+    const timer = setTimeout(() => setQuery(params.q as string), 0);
+    return () => clearTimeout(timer);
   }, [params.q]);
 
-  useEffect(() => {
-    loadRecentSearches();
-  }, []);
-
-  const loadRecentSearches = async () => {
+  async function loadRecentSearches() {
     try {
       const saved = await AsyncStorage.getItem('recentSearches');
       if (saved) {
@@ -129,6 +125,9 @@ export default function SearchScreen() {
       console.error('Failed to load recent searches', e);
     }
   };
+  useEffect(() => {
+    void Promise.resolve().then(() => loadRecentSearches());
+  }, []);
 
   const saveRecentSearch = async (term: string) => {
     if (!term.trim()) return;
@@ -163,10 +162,13 @@ export default function SearchScreen() {
 
   useEffect(() => {
     const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    void Promise.resolve().then(() => {
+    if (controller.signal.aborted) return;
     setSearchError(null);
     if (!query.trim()) { setResults({ tracks: [], artists: [], albums: [] }); setLoading(false); return; }
     setLoading(true);
-    const timer = setTimeout(async () => {
+    timer = setTimeout(async () => {
       try {
         const data = await api.search(query, controller.signal);
         if (controller.signal.aborted) return;
@@ -176,6 +178,7 @@ export default function SearchScreen() {
         if (!controller.signal.aborted) { setResults({ tracks: [], artists: [], albums: [] }); setSearchError('Search is taking a break. Please try again.'); }
       } finally { if (!controller.signal.aborted) setLoading(false); }
     }, 400);
+    });
     return () => { clearTimeout(timer); controller.abort(); };
   }, [query, searchAttempt]);
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -14,13 +14,13 @@ interface Props {
 export function AnimatedSplashScreen({ ready, onFinish, onLayout, onRetry }: Props) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const opacity = useRef(new Animated.Value(1)).current;
-  const pulse = useRef(new Animated.Value(0)).current;
+  const [opacity] = useState(() => new Animated.Value(1));
+  const [pulse] = useState(() => new Animated.Value(0));
   const [imageReady, setImageReady] = useState(false);
   const [takingLonger, setTakingLonger] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const artworkWidth = Math.min(width, height * 851 / 1849);
-  const artworkHeight = artworkWidth * 1849 / 851;
+  const artworkWidth = width;
+  const artworkHeight = height;
   useEffect(() => {
     if (ready) return;
     const timer = setTimeout(() => setTakingLonger(true), 15000);
@@ -48,14 +48,16 @@ export function AnimatedSplashScreen({ ready, onFinish, onLayout, onRetry }: Pro
       <StatusBar style="light" />
       <View style={{ width: artworkWidth, height: artworkHeight }}>
         <Image
-          source={require('../../assets/images/soundwave-splash-v3.png')}
-          style={StyleSheet.absoluteFillObject}
+          source={require('../../assets/images/soundwave-logo-transparent.png')}
+          style={{ width: Math.min(width * 0.44, 200), height: Math.min(width * 0.44, 200), alignSelf: 'center', marginTop: Math.max(insets.top + 24, height * 0.30) }}
           resizeMode="contain"
           accessible
           accessibilityLabel="Soundwave. Your music. Your moment."
           onLoadEnd={() => setImageReady(true)}
         />
-        <View style={[styles.loading, { bottom: Math.max(artworkHeight * 0.047, insets.bottom + 16), height: artworkHeight * 0.065 }]}>
+        <Text style={{ color: '#FFF', textAlign: 'center', fontSize: 28, letterSpacing: 5, marginTop: 24 }}>SOUNDWAVE</Text>
+        <Text style={{ color: '#AC8EC7', textAlign: 'center', fontSize: 16, marginTop: 12 }}>Your music. Your moment.</Text>
+        <View style={[styles.loading, { bottom: insets.bottom + 40 }]}>
           <View style={styles.track} accessibilityRole="progressbar" accessibilityLabel="Loading your music">
             <Animated.View style={{ width: '68%', height: '100%', opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }}>
               <LinearGradient colors={['#8A3FFC', '#DF8AFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.fill} />
@@ -73,8 +75,8 @@ export function AnimatedSplashScreen({ ready, onFinish, onLayout, onRetry }: Pro
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#13071F', alignItems: 'center', justifyContent: 'center' },
-  loading: { position: 'absolute', left: 0, right: 0, alignItems: 'center', backgroundColor: '#13071F', paddingTop: 8 },
+  container: { flex: 1, backgroundColor: '#13071F', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  loading: { position: 'absolute', left: 0, right: 0, alignItems: 'center', paddingTop: 8 },
   track: { width: '57%', height: 3, borderRadius: 3, overflow: 'hidden', backgroundColor: '#362043' },
   fill: { flex: 1, borderRadius: 3 },
   caption: { color: '#AC8EC7', fontSize: 12, letterSpacing: 1, marginTop: 16 },

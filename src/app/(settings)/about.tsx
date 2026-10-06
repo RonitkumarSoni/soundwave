@@ -23,7 +23,7 @@ export default function AboutScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.version}>Version 1.0.0</Text>
+        <Text style={styles.version}>Version 1.0.1</Text>
         <Text style={styles.text}>
           Soundwave is your ultimate music streaming platform. Designed to give you an immersive and fast listening experience.
         </Text>

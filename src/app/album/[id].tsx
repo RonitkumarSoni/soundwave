@@ -32,6 +32,8 @@ export default function AlbumDetailScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    void Promise.resolve().then(() => {
+    if (cancelled) return;
     setLoading(true); setLoadError(false);
     setAlbum(null); setTracks([]);
     void Promise.all([api.getAlbumById(id, source), api.getAlbumTracks(id, source)]).then(([details, items]) => {
@@ -39,6 +41,7 @@ export default function AlbumDetailScreen() {
       if (!details) throw new Error("Details unavailable");
       setAlbum(details); setTracks(items || []);
     }).catch(() => { if (!cancelled) setLoadError(true); }).finally(() => { if (!cancelled) setLoading(false); });
+    });
     return () => { cancelled = true; };
   }, [id, source, attempt]);
 

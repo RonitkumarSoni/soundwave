@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { User, signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { api } from '@/lib/api';
+import { API_BASE } from '@/lib/config';
 import { usePlayerStore } from './usePlayerStore';
 import { useSettingsStore } from './useSettingsStore';
 import { clearGoogleSession } from '@/lib/googleSignIn';
@@ -24,22 +25,43 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setAuthData: async (profile, firebaseUser) => { await get().syncUser(firebaseUser); },
   syncUser: async (firebaseUser) => {
     const revision = ++sessionRevision;
-    await usePlayerStore.getState().switchAccount(firebaseUser?.uid || null);
-    if (revision !== sessionRevision) return;
-    await useSettingsStore.getState().loadFromStorage();
-    if (revision !== sessionRevision) return;
+    const accountChanged = get().isLoading || !firebaseUser || get().firebaseUser?.uid !== firebaseUser.uid;
+    if (accountChanged) {
+      set({ isLoading: true });
+      await usePlayerStore.getState().switchAccount(firebaseUser?.uid || null);
+      if (revision !== sessionRevision) return;
+      await useSettingsStore.getState().loadFromStorage();
+      if (revision !== sessionRevision) return;
+    }
     if (!firebaseUser) {
       set({ user: null, firebaseUser: null, isLoggedIn: false, isLoading: false, emailVerified: false, profileError: null });
       return;
     }
     set({ firebaseUser, isLoggedIn: true, emailVerified: firebaseUser.emailVerified, isLoading: false,
-      user: { id: firebaseUser.uid, email: firebaseUser.email || '', display_name: firebaseUser.displayName || 'User', avatar_url: firebaseUser.photoURL || '', is_premium: false, oauth_provider: firebaseUser.providerData[0]?.providerId || null }, profileError: null });
+      user: !accountChanged && get().user ? get().user : { id: firebaseUser.uid, email: firebaseUser.email || '', display_name: firebaseUser.displayName || 'User', avatar_url: firebaseUser.photoURL || '', is_premium: false, oauth_provider: firebaseUser.providerData[0]?.providerId || null }, profileError: null });
     if (!firebaseUser.emailVerified) return;
     try {
       const profile = await api.auth.me();
       if (revision === sessionRevision && auth.currentUser?.uid === firebaseUser.uid) set({ user: profile, profileError: null });
-    } catch {
-      if (revision === sessionRevision) set({ profileError: 'Your account could not sync. Check your connection and try again.' });
+    } catch (error: any) {
+      const status = error?.response?.status;
+      const message = status === 429 ? 'The account service received too many requests. Please wait a minute before retrying.'
+        : status === 401 ? 'Your session could not be verified. Sign in again.'
+        : status === 503 ? 'The backend authentication service is unavailable or not configured.'
+        : status >= 500 ? 'The backend returned a server error. Try again shortly.'
+        : status ? `Account sync failed (HTTP ${status}).`
+        : 'Could not connect to the account service. Check your connection and retry.';
+      if (revision === sessionRevision && auth.currentUser?.uid === firebaseUser.uid) {
+        const responseMessage = error?.response?.data?.message;
+        const reason = typeof responseMessage === 'string' && [
+          'Sign in to continue', 'Invalid or expired session',
+          'Verify your email before using your account',
+          'Authentication service is not configured',
+          'Backend authentication service could not verify your session',
+        ].includes(responseMessage) ? responseMessage : 'Unrecognized backend response';
+        console.warn('[Account sync failed]', { status: status || 'no response', code: error?.code || 'unknown', backend: API_BASE, reason });
+        set({ profileError: message });
+      }
     }
   },
   logout: async () => {
