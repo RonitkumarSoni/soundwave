@@ -10,6 +10,10 @@ import { resolve } from 'node:path';
 import axios from 'axios';
 import type { Readable } from 'node:stream';
 import type { YoutubeSong } from './provider-types';
+import {
+  withYoutubeSession,
+  YoutubeSessionConfigurationError,
+} from './youtube-session';
 
 const execute = promisify(execFile);
 interface AudioInfo {
@@ -42,21 +46,29 @@ export class YoutubeAudioService {
           'bin',
           process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp',
         );
-      const { stdout } = await execute(
-        command,
-        [
-          ...(python ? ['-m', 'yt_dlp'] : []),
-          '--ignore-config',
-          '--flat-playlist',
-          '--dump-single-json',
-          '--no-warnings',
-          '--socket-timeout',
-          '10',
-          '--retries',
-          '0',
-          `ytsearch${count}:${search}`,
-        ],
-        { timeout: 30000, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
+      const { stdout } = await withYoutubeSession((cookieArgs, env) =>
+        execute(
+          command,
+          [
+            ...(python ? ['-m', 'yt_dlp'] : []),
+            ...cookieArgs,
+            '--ignore-config',
+            '--flat-playlist',
+            '--dump-single-json',
+            '--no-warnings',
+            '--socket-timeout',
+            '10',
+            '--retries',
+            '0',
+            `ytsearch${count}:${search}`,
+          ],
+          {
+            timeout: 30000,
+            maxBuffer: 8 * 1024 * 1024,
+            windowsHide: true,
+            env,
+          },
+        ),
       );
       const response = JSON.parse(stdout) as {
         entries?: {
@@ -129,11 +141,18 @@ export class YoutubeAudioService {
         'node',
         `https://www.youtube.com/watch?v=${id}`,
       ];
-      const { stdout } = await execute(command, args, {
-        timeout: 30000,
-        maxBuffer: 8 * 1024 * 1024,
-        windowsHide: true,
-      });
+      const { stdout } = await withYoutubeSession((cookieArgs, env) =>
+        execute(
+          command,
+          [...args.slice(0, -1), ...cookieArgs, args[args.length - 1]],
+          {
+            timeout: 30000,
+            maxBuffer: 8 * 1024 * 1024,
+            windowsHide: true,
+            env,
+          },
+        ),
+      );
       const info = JSON.parse(stdout) as AudioInfo;
       const url = new URL(info.url);
       if (
@@ -194,15 +213,17 @@ export class YoutubeAudioService {
         response?: { status?: number };
       };
       const reason =
-        detail.code === 'ENOENT'
-          ? 'extractor-not-installed'
-          : /sign in|not a bot|login required/i.test(detail.stderr || '')
-            ? 'upstream-sign-in-required'
-            : detail.response?.status
-              ? `upstream-http-${detail.response.status}`
-              : detail.code === 'ETIMEDOUT' || detail.code === 'ECONNABORTED'
-                ? 'upstream-timeout'
-                : 'extraction-failed';
+        error instanceof YoutubeSessionConfigurationError
+          ? 'youtube-session-invalid'
+          : detail.code === 'ENOENT'
+            ? 'extractor-not-installed'
+            : /sign in|not a bot|login required/i.test(detail.stderr || '')
+              ? 'upstream-sign-in-required'
+              : detail.response?.status
+                ? `upstream-http-${detail.response.status}`
+                : detail.code === 'ETIMEDOUT' || detail.code === 'ECONNABORTED'
+                  ? 'upstream-timeout'
+                  : 'extraction-failed';
       // Never log signed media URLs, cookies or extractor output.
       this.logger.warn(`Audio request failed: ${reason}; video=${id}`);
       throw new ServiceUnavailableException({

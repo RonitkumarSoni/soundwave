@@ -2,9 +2,11 @@
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const path = require('node:path');
+const { withYoutubeSession, YoutubeSessionConfigurationError } = require('../dist/catalog/youtube-session');
 const run = promisify(execFile);
 const binary = process.env.YTDLP_PYTHON || process.env.YTDLP_BINARY || path.resolve(__dirname, '../bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 function classify(error) {
+  if (error instanceof YoutubeSessionConfigurationError) return 'youtube-session-invalid';
   const text = error.stderr || '';
   return /sign in|not a bot|login required/i.test(text) ? 'upstream-sign-in-required'
     : /signature|decipher|javascript runtime|challenge solving/i.test(text) ? 'player-challenge-failed'
@@ -17,13 +19,14 @@ function classify(error) {
   for (const id of ['x--zeOqqeFc', '-xjhuuVXcF0']) {
     let stage = 'extraction';
     try {
-      const { stdout } = await run(binary, [
+      const { stdout } = await withYoutubeSession((cookieArgs, env) => run(binary, [
         ...(process.env.YTDLP_PYTHON ? ['-m', 'yt_dlp'] : []),
+        ...cookieArgs,
         '--ignore-config', '--no-cache-dir', '--no-playlist', '--no-warnings',
         '--skip-download', '--dump-single-json', '--format', 'bestaudio[ext=m4a]/bestaudio',
         '--socket-timeout', '10', '--retries', '0', '--extractor-retries', '0',
         '--js-runtimes', 'node', `https://www.youtube.com/watch?v=${id}`,
-      ], { timeout: 30000, maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+      ], { timeout: 30000, maxBuffer: 8 * 1024 * 1024, windowsHide: true, env }));
       const info = JSON.parse(stdout);
       const media = new URL(info.url);
       if (media.protocol !== 'https:' || !media.hostname.endsWith('.googlevideo.com')) throw new Error('Invalid media host');
