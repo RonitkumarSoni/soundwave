@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "diagnose:youtube": "node scripts/diagnose-youtube.cjs",
     "prebuild": "node scripts/install-ytdlp.cjs",
     "prestart:dev": "node scripts/install-ytdlp.cjs",
     "build": "nest build",

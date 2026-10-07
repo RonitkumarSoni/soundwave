@@ -157,18 +157,35 @@ export class YoutubeAudioService {
     if (range && !/^bytes=(\d+-\d*|-\d+)$/.test(range))
       throw new BadRequestException('Invalid audio range');
     try {
-      const info = await this.extract(id);
-      return await axios.get<Readable>(info.url, {
-        responseType: 'stream',
-        timeout: 20000,
-        signal,
-        maxRedirects: 0,
-        headers: {
-          'User-Agent': info.http_headers?.['User-Agent'] || 'Mozilla/5.0',
-          ...(range ? { Range: range } : {}),
-        },
-        validateStatus: (status) => [200, 206, 416].includes(status),
-      });
+      const fetchAudio = async () => {
+        const info = await this.extract(id);
+        return axios.get<Readable>(info.url, {
+          responseType: 'stream',
+          timeout: 20000,
+          signal,
+          maxRedirects: 0,
+          headers: {
+            'User-Agent': info.http_headers?.['User-Agent'] || 'Mozilla/5.0',
+            ...(range ? { Range: range } : {}),
+          },
+          validateStatus: (status) => [200, 206, 416].includes(status),
+        });
+      };
+      try {
+        return await fetchAudio();
+      } catch (error) {
+        // A cached signed URL can expire before its local cache TTL.
+        // Resolve once again only for rejected media URLs, never for sign-in failures.
+        if (
+          signal.aborted ||
+          !axios.isAxiosError(error) ||
+          ![403, 410].includes(error.response?.status || 0)
+        )
+          throw error;
+        error.response?.data?.destroy?.();
+        this.cache.delete(id);
+        return await fetchAudio();
+      }
     } catch (error: unknown) {
       this.cache.delete(id);
       const detail = error as {
@@ -188,9 +205,11 @@ export class YoutubeAudioService {
                 : 'extraction-failed';
       // Never log signed media URLs, cookies or extractor output.
       this.logger.warn(`Audio request failed: ${reason}; video=${id}`);
-      throw new ServiceUnavailableException(
-        'YouTube audio could not be loaded. Please retry.',
-      );
+      throw new ServiceUnavailableException({
+        statusCode: 503,
+        message: 'YouTube audio could not be loaded. Please retry.',
+        code: reason,
+      });
     }
   }
 }
