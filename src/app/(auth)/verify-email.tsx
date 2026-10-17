@@ -1,9 +1,8 @@
 import { useAuthStore } from '@/stores/useAuthStore';
 import React, { useCallback, useEffect, useRef } from 'react';
-import { AppState, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Toast from 'react-native-toast-message';
 import { auth } from '@/lib/firebase';
 import { reload } from 'firebase/auth';
 
@@ -15,21 +14,18 @@ export default function VerifyEmailScreen() {
   const email = auth.currentUser?.email || 'your email address';
   const checking = useRef(false);
 
-  const checkVerification = useCallback(async (showResult = false) => {
+  const checkVerification = useCallback(async () => {
     const user = auth.currentUser;
     if (!user || checking.current) return;
     checking.current = true;
     try {
       await reload(user);
-      if (!auth.currentUser?.emailVerified) {
-        if (showResult) Toast.show({ type: 'error', text1: 'Not verified yet', text2: 'Open the verification link sent to this email, then try again.' });
-        return;
-      }
+      if (!auth.currentUser?.emailVerified) return;
       await auth.currentUser.getIdToken(true);
       await useAuthStore.getState().syncUser(auth.currentUser);
       router.replace('/onboarding');
     } catch {
-      if (showResult) Toast.show({ type: 'error', text1: 'Could not check verification', text2: 'Check your connection and try again.' });
+      // Keep polling quietly; the verification link may still be opening.
     } finally {
       checking.current = false;
     }
@@ -38,13 +34,7 @@ export default function VerifyEmailScreen() {
   useEffect(() => {
     void checkVerification();
     const interval = setInterval(() => void checkVerification(), 3000);
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void checkVerification();
-    });
-    return () => {
-      clearInterval(interval);
-      subscription.remove();
-    };
+    return () => clearInterval(interval);
   }, [checkVerification]);
 
   return (
@@ -66,10 +56,6 @@ export default function VerifyEmailScreen() {
           <Text style={styles.emailText}>{email}</Text>
         </Text>
         <Text style={styles.waitingText}>After verification, you&apos;ll continue automatically.</Text>
-
-        <TouchableOpacity style={styles.continueButton} onPress={() => void checkVerification(true)}>
-          <Text style={styles.continueButtonText}>I&apos;ve verified — continue</Text>
-        </TouchableOpacity>
 
         <TouchableOpacity style={styles.resendButton} onPress={async () => { await useAuthStore.getState().logout(); router.replace('/(auth)/welcome'); }}>
           <Text style={styles.resendText}>Use a different account</Text>
@@ -121,20 +107,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 20,
-  },
-  continueButton: {
-    width: '100%',
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
-    marginBottom: 12,
-  },
-  continueButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
   },
   resendButton: {
     padding: 16,
