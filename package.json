@@ -12,6 +12,7 @@
     "crypto-js": "^4.2.0",
     "decode-uri-component": "file:vendor/decode-uri-component",
     "expo": "~57.0.26",
+    "expo-asset": "~57.0.20",
     "expo-audio": "~57.0.5",
     "expo-auth-session": "~57.0.13",
     "expo-blur": "~57.0.3",

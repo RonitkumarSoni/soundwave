@@ -224,7 +224,7 @@ export default function RootLayout() {
         </>
       )}
 
-      {(isLoading || routePending || !isAnimationComplete) && (
+      {(isLoading || !isAnimationComplete) && (
         <View style={[StyleSheet.absoluteFill, { zIndex: 100 }]}>
           <AnimatedSplashScreen
             ready={!isLoading && !routePending}
