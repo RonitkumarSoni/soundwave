@@ -10,36 +10,46 @@ export class YoutubeSessionConfigurationError extends Error {
 
 // Only YouTube cookies belong in the extractor's cookie jar. Never log input.
 export function normalizeYoutubeCookies(input: string): string {
-  if (Buffer.byteLength(input) > 1024 * 1024 || input.includes('\0')) {
+  if (!input || Buffer.byteLength(input) > 2 * 1024 * 1024) {
     throw new YoutubeSessionConfigurationError();
   }
-  const lines = input.replace(/^\uFEFF/, '').split(/\r?\n/);
-  if (!/^# (Netscape HTTP Cookie File|HTTP Cookie File)/.test(lines[0])) {
-    throw new YoutubeSessionConfigurationError();
-  }
+  // Standardize newlines and handle raw escaped newlines if saved from UI
+  const rawClean = input.replace(/^\uFEFF/, '').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+  const lines = rawClean.split(/\r?\n/);
+  
   const cookies: string[] = [];
-  for (const line of lines.slice(1)) {
-    if (
-      !line.trim() ||
-      (line.startsWith('#') && !line.startsWith('#HttpOnly_'))
-    )
+  let buffer = '';
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('#') && !trimmed.startsWith('#HttpOnly_')) continue;
+
+    // Check if previous incomplete line needs to be joined
+    const candidate = buffer ? `${buffer}\t${trimmed}` : trimmed;
+    const cleanLine = candidate.replace(/^#HttpOnly_/, '');
+    const fields = cleanLine.split(/\t+/);
+
+    if (fields.length < 7) {
+      buffer = candidate;
       continue;
-    const fields = line.replace(/^#HttpOnly_/, '').split('\t');
-    if (
-      fields.length !== 7 ||
-      !/^(TRUE|FALSE)$/.test(fields[1]) ||
-      !/^(TRUE|FALSE)$/.test(fields[3]) ||
-      !/^\d+$/.test(fields[4]) ||
-      !fields[5]
-    ) {
-      throw new YoutubeSessionConfigurationError();
     }
+
+    buffer = '';
     const domain = fields[0].replace(/^\./, '').toLowerCase();
     if (domain !== 'youtube.com' && !domain.endsWith('.youtube.com')) continue;
-    const expires = Number(fields[4]);
-    if (expires !== 0 && expires <= Date.now() / 1000) continue;
-    cookies.push(line);
+
+    const flag1 = /^(TRUE|FALSE)$/i.test(fields[1]) ? fields[1].toUpperCase() : 'TRUE';
+    const path = fields[2] || '/';
+    const flag2 = /^(TRUE|FALSE)$/i.test(fields[3]) ? fields[3].toUpperCase() : 'TRUE';
+    const expiry = /^\d+$/.test(fields[4]) ? fields[4] : '0';
+    const name = fields[5];
+    const value = fields.slice(6).join('\t');
+
+    if (!name || !value) continue;
+    cookies.push(`${fields[0]}\t${flag1}\t${path}\t${flag2}\t${expiry}\t${name}\t${value}`);
   }
+
   if (!cookies.length) throw new YoutubeSessionConfigurationError();
   return '# Netscape HTTP Cookie File\n' + cookies.join('\n') + '\n';
 }
