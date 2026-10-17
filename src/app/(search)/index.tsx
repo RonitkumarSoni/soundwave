@@ -356,7 +356,7 @@ export default function SearchScreen() {
                         activeOpacity={0.7}
                       >
                         <Image source={{ uri: artist.image || 'https://via.placeholder.com/150' }} style={styles.artistImage} />
-                        <Text style={styles.artistName}>{artist.name}</Text>
+                        <View style={{ flex: 1, justifyContent: 'center' }}><Text style={styles.artistName} numberOfLines={1}>{artist.name}</Text><Text style={styles.albumArtist}>Artist</Text></View><Ionicons name='chevron-forward' size={16} color={colors.secondaryLabel} style={{ marginRight: spacing.sm }} />
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -373,10 +373,11 @@ export default function SearchScreen() {
                         activeOpacity={0.7}
                       >
                         <Image source={{ uri: album.image || 'https://via.placeholder.com/150' }} style={styles.albumImage} />
-                        <View>
-                          <Text style={styles.artistName}>{album.name}</Text>
-                          <Text style={styles.albumArtist}>{album.artist_name}</Text>
+                        <View style={{ flex: 1, justifyContent: 'center' }}>
+                          <Text style={styles.artistName} numberOfLines={1}>{album.title || album.name}</Text>
+                          <Text style={styles.albumArtist} numberOfLines={1}>{album.artist || album.artist_name || 'Album'}</Text>
                         </View>
+                        <Ionicons name='chevron-forward' size={16} color={colors.secondaryLabel} style={{ marginRight: spacing.sm }} />
                       </TouchableOpacity>
                     ))}
                   </View>

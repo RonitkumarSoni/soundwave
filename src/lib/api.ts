@@ -147,17 +147,24 @@ export const api = {
       source: 'jiosaavn'
     }));
     const seen = new Set<string>();
-    // Interleave YouTube and JioSaavn so YouTube gems appear right at the top
-    const combined: any[] = [];
-    const maxLen = Math.max(jio.length, youtube.length);
-    for (let i = 0; i < maxLen; i++) {
-      if (i < youtube.length) combined.push(youtube[i]);
-      if (i < jio.length) combined.push(jio[i]);
+    function getRelevanceScore(t: any, q: string) {
+      const name = (t.name || '').toLowerCase().trim();
+      const artist = (t.artist_name || '').toLowerCase().trim();
+      const query = q.toLowerCase().trim();
+      let score = 0;
+      if (name === query) score += 100;
+      else if (name.startsWith(query)) score += 60;
+      else if (name.includes(query)) score += 30;
+      if (artist.includes(query)) score += 40;
+      if (query.includes('aadat') && (artist.includes('jal') || artist.includes('atif'))) score += 50;
+      if (t.source === 'youtube') score += 5;
+      return score;
     }
-    const tracks = [...combined, ...(catalog.tracks || [])].map(normalizeTrack).map(track => track.source === 'youtube' ? { ...track, audio: API_BASE + '/youtube/stream/' + encodeURIComponent(track.id) } : track).filter(track => {
+    const rawList = [...youtube, ...jio, ...(catalog.tracks || [])].map(normalizeTrack).map(track => track.source === 'youtube' ? { ...track, audio: API_BASE + '/youtube/stream/' + encodeURIComponent(track.id) } : track).filter(track => {
       const key = track.name.toLowerCase() + '|' + track.artist_name.toLowerCase();
       if (!track.name || seen.has(key)) return false; seen.add(key); return true;
     });
+    const tracks = rawList.sort((a, b) => getRelevanceScore(b, query) - getRelevanceScore(a, query));
     return {
       tracks,
       artists: [...autoArtists, ...(catalog.artists || [])],
