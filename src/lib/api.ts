@@ -118,25 +118,45 @@ export const api = {
       return data;
     }
   },
-  search: async (query: string, signal?: AbortSignal) => {
-    const jioUrl = getProxiedUrl('https://www.jiosaavn.com/api.php?__call=search.getResults&q=' + encodeURIComponent(query) + '&n=15&p=1&_format=json&_marker=0&ctx=android');
+    search: async (query: string, signal?: AbortSignal) => {
+    const jioUrl = getProxiedUrl('https://www.jiosaavn.com/api.php?__call=search.getResults&q=' + encodeURIComponent(query) + '&n=20&p=1&_format=json&_marker=0&ctx=android');
+    const jioAutoUrl = getProxiedUrl('https://www.jiosaavn.com/api.php?__call=autocomplete.get&query=' + encodeURIComponent(query) + '&_format=json&_marker=0&ctx=android');
     const responses = await Promise.allSettled([
-      apiClient.get('/youtube/tracks', { params: { q: query, limit: 15 }, signal }),
       publicData(jioUrl, signal),
+      publicData(jioAutoUrl, signal),
+      apiClient.get('/youtube/tracks', { params: { q: query, limit: 15 }, signal }),
       apiClient.get('/catalog/search', { params: { q: query, limit: 10 }, signal }),
     ]);
     if (signal?.aborted) throw new Error('Search cancelled');
     if (responses.every(response => response.status === 'rejected')) throw new Error('Search is unavailable. Check your connection and try again.');
-    const youtube = responses[0].status === 'fulfilled' ? responses[0].value.data.results || [] : [];
-    const jio = responses[1].status === 'fulfilled' ? (responses[1].value.results || []).map(jioTrack) : [];
-    const catalog = responses[2].status === 'fulfilled' ? responses[2].value.data : {};
+    const jio = responses[0].status === 'fulfilled' ? (responses[0].value.results || []).map(jioTrack) : [];
+    const auto = responses[1].status === 'fulfilled' ? responses[1].value : {};
+    const youtube = responses[2].status === 'fulfilled' ? (responses[2].value.data?.results || []) : [];
+    const catalog = responses[3].status === 'fulfilled' ? responses[3].value.data : {};
+    const autoArtists = (auto.artists?.data || []).map((a: any) => ({
+      id: String(a.id),
+      name: String(a.title || a.name || ''),
+      image: formatImageUrl(a.image),
+      source: 'jiosaavn'
+    }));
+    const autoAlbums = (auto.albums?.data || []).map((a: any) => ({
+      id: String(a.id),
+      title: String(a.title || a.name || ''),
+      artist: String(a.music || a.artist || ''),
+      image: formatImageUrl(a.image),
+      source: 'jiosaavn'
+    }));
     const seen = new Set<string>();
-    const tracks = [...youtube, ...jio, ...(catalog.tracks || [])].map(normalizeTrack).map(track => track.source === 'youtube' ? { ...track, audio: API_BASE + '/youtube/stream/' + encodeURIComponent(track.id) } : track).filter(track => {
+    const tracks = [...jio, ...youtube, ...(catalog.tracks || [])].map(normalizeTrack).map(track => track.source === 'youtube' ? { ...track, audio: API_BASE + '/youtube/stream/' + encodeURIComponent(track.id) } : track).filter(track => {
       const key = track.name.toLowerCase() + '|' + track.artist_name.toLowerCase();
       if (!track.name || seen.has(key)) return false; seen.add(key); return true;
     });
-    return { tracks, artists: catalog.artists || [], albums: catalog.albums || [],
-      partial: Boolean(catalog.partial) || responses.some(response => response.status === 'rejected') };
+    return {
+      tracks,
+      artists: [...autoArtists, ...(catalog.artists || [])],
+      albums: [...autoAlbums, ...(catalog.albums || [])],
+      partial: responses.some(response => response.status === 'rejected')
+    };
   },
 
   getTracks: async () => {
@@ -424,8 +444,7 @@ export const api = {
   },
 
   getYoutubeHits: async () => {
-    const { data } = await withRetry(() => apiClient.get('/youtube/tracks?limit=15', { timeout: 45000 }), 1, 1000);
-    return (data.results || []).map((track: any) => normalizeBackendTrack(track, API_BASE));
+    return api.getPopular(15, 0, 'popularity_total', 'India');
   },
   importSpotify: async (url: string) => {
     try {

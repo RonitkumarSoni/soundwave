@@ -386,7 +386,7 @@ export default function HomeScreen() {
               {youtubeTracks.length > 0 && (
                 <View style={{ marginBottom: spacing.md }}>
                   <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Trending on YouTube Music</Text>
+                    <Text style={styles.sectionTitle}>Trending Hits</Text>
                   </View>
                   <FlatList
                     data={youtubeTracks}

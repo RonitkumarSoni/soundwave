@@ -103,6 +103,25 @@ export class YoutubeAudioService {
     this.podcastRequests.set(key, request);
     return request;
   }
+    private async fetchRapidApiAudio(id: string, signal: AbortSignal, range?: string) {
+    const key = process.env.RAPIDAPI_KEY || '3d1e03cde9mshed1d6dbdc9d8136p1fb009jsn64712300c043';
+    const host = process.env.RAPIDAPI_HOST || 'youtube-mp36.p.rapidapi.com';
+    const res = await axios.get(`https://${host}/dl?id=${id}`, {
+      headers: { 'x-rapidapi-key': key, 'x-rapidapi-host': host },
+      timeout: 15000,
+      signal,
+    });
+    if (res.data?.link) {
+      return axios.get<Readable>(res.data.link, {
+        responseType: 'stream',
+        timeout: 20000,
+        signal,
+        headers: range ? { Range: range } : undefined,
+        validateStatus: (status) => [200, 206, 416].includes(status),
+      });
+    }
+    throw new Error('RapidAPI did not return download link');
+  }
   private async extract(id: string): Promise<AudioInfo> {
     const cached = this.cache.get(id);
     if (cached && cached.until > Date.now()) return cached.info;
@@ -179,6 +198,12 @@ export class YoutubeAudioService {
       throw new BadRequestException('Invalid video ID');
     if (range && !/^bytes=(\d+-\d*|-\d+)$/.test(range))
       throw new BadRequestException('Invalid audio range');
+    // First try RapidAPI directly for instant, unblocked 320kbps MP3 stream
+    try {
+      return await this.fetchRapidApiAudio(id, signal, range);
+    } catch (rapidErr: any) {
+      this.logger.warn('RapidAPI stream attempt failed, falling back to local extractor');
+    }
     try {
       const fetchAudio = async () => {
         const info = await this.extract(id);

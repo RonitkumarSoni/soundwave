@@ -5,7 +5,7 @@ import { usePlayerStore } from '@/stores/usePlayerStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { audioUri, sameTrack, trackKey } from '@/lib/tracks';
 import { previewFile } from './previewCache';
-import { checkAudioSource } from '@/lib/audioSource';
+import { resolvePlayableUri } from '@/lib/audioSource';
 import { API_BASE } from '@/lib/config';
 
 // Expo Go cannot install the app's background playback service config plugin.
@@ -75,10 +75,10 @@ async function syncPlayer(version: number) {
     releasePlayer();
     fromPlayer({ isAudioLoading: true });
     check = new AbortController();
-    await checkAudioSource(track.source, uri, check.signal);
+    const playableUri = await resolvePlayableUri(track, uri, check.signal);
     check = null;
     if (version !== revision) return;
-    const instance = createAudioPlayer({ uri }, { updateInterval: 500 });
+    const instance = createAudioPlayer({ uri: playableUri }, { updateInterval: 500 });
     player = instance;
     failed = false;
     loadedKey = trackKey(track);
