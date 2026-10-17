@@ -147,7 +147,14 @@ export const api = {
       source: 'jiosaavn'
     }));
     const seen = new Set<string>();
-    const tracks = [...jio, ...youtube, ...(catalog.tracks || [])].map(normalizeTrack).map(track => track.source === 'youtube' ? { ...track, audio: API_BASE + '/youtube/stream/' + encodeURIComponent(track.id) } : track).filter(track => {
+    // Interleave YouTube and JioSaavn so YouTube gems appear right at the top
+    const combined: any[] = [];
+    const maxLen = Math.max(jio.length, youtube.length);
+    for (let i = 0; i < maxLen; i++) {
+      if (i < youtube.length) combined.push(youtube[i]);
+      if (i < jio.length) combined.push(jio[i]);
+    }
+    const tracks = [...combined, ...(catalog.tracks || [])].map(normalizeTrack).map(track => track.source === 'youtube' ? { ...track, audio: API_BASE + '/youtube/stream/' + encodeURIComponent(track.id) } : track).filter(track => {
       const key = track.name.toLowerCase() + '|' + track.artist_name.toLowerCase();
       if (!track.name || seen.has(key)) return false; seen.add(key); return true;
     });

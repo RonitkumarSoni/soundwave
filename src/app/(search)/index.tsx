@@ -239,6 +239,8 @@ export default function SearchScreen() {
     >
       <ScrollView
         style={styles.scrollView}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         contentContainerStyle={{
           paddingTop: insets.top + spacing.sm,
           paddingBottom: 160,
@@ -330,9 +332,9 @@ export default function SearchScreen() {
                 {(activeTab === "Top" || activeTab === "Songs") && results.tracks.length > 0 && (
                   <View>
                     {activeTab === "Top" && <Text style={styles.resultLabel}>Songs</Text>}
-                    {results.tracks.slice(0, activeTab === "Top" ? 5 : 20).map((track, index) => (
+                    {results.tracks.slice(0, activeTab === "Top" ? 8 : 50).map((track, index) => (
                       <View key={track.id}>
-                        <TrackRow track={track} index={index} contextQueue={results.tracks} />
+                        <TrackRow track={track} index={index} contextQueue={results.tracks} openPlayerOnPress />
                         {index === 0 && query.trim().split(' ').length > 2 && (
                           <View style={{ position: 'absolute', right: spacing.lg, top: spacing.md, backgroundColor: 'rgba(255, 255, 255, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                             <Text style={{ color: colors.secondaryLabel, fontSize: 10 }}>Lyrics match</Text>
@@ -407,6 +409,7 @@ export default function SearchScreen() {
                 </View>
                 <ScrollView
                   horizontal
+                  keyboardShouldPersistTaps="handled"
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.recentScrollContent}
                 >
