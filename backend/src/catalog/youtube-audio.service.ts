@@ -133,6 +133,8 @@ export class YoutubeAudioService {
         '--dump-single-json',
         '--format',
         'ba/b',
+        '--extractor-args',
+        'youtube:player_client=ios,android',
         '--socket-timeout',
         '10',
         '--retries',
