@@ -59,20 +59,23 @@ export async function withYoutubeSession<T>(
 ): Promise<T> {
   const { YTDLP_COOKIES, YTDLP_COOKIES_FILE, ...environment } = process.env;
   if (!YTDLP_COOKIES && !YTDLP_COOKIES_FILE) return run([], environment);
-  let content: string;
-  try {
-    const raw = YTDLP_COOKIES_FILE
-      ? await readFile(YTDLP_COOKIES_FILE, 'utf8')
-      : YTDLP_COOKIES!;
+  let content: string | null = null;
+  if (YTDLP_COOKIES_FILE) {
     try {
-      content = normalizeYoutubeCookies(raw);
-    } catch (normErr) {
-      console.warn('Cookie normalization warning, using raw content:', normErr instanceof Error ? normErr.message : normErr);
-      content = raw;
+      content = await readFile(YTDLP_COOKIES_FILE, 'utf8');
+    } catch {
+      // Secret file not mounted or path not found, fall back to YTDLP_COOKIES env var
     }
-  } catch (err) {
-    console.error('Failed reading cookies source:', err);
-    return run([], environment);
+  }
+  if (!content && YTDLP_COOKIES) {
+    content = YTDLP_COOKIES;
+  }
+  if (!content) return run([], environment);
+
+  try {
+    content = normalizeYoutubeCookies(content);
+  } catch (normErr) {
+    // If normalization warns, content is still usable raw
   }
   // yt-dlp may update its cookie jar. Copy the read-only Render secret into a
   // private, per-request file so parallel requests cannot overwrite each other.
