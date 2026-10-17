@@ -24,5 +24,9 @@ services:
         sync: false
       - key: JAMENDO_CLIENT_ID
         value: bc277c86
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: RAPIDAPI_HOST
+        value: youtube-mp36.p.rapidapi.com
       - key: DATABASE_URL
         sync: false

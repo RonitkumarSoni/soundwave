@@ -149,7 +149,7 @@ export default function SignupScreen() {
               <TextInput autoComplete="off" importantForAutofill="noExcludeDescendants" textContentType="none"
                 style={styles.input}
                 placeholder="Enter your email"
-                placeholderTextColor="rgba(255,255,255,0.4)"
+                placeholderTextColor="#C7B8DF"
                 value={email}
                 onChangeText={(text) => { setEmail(text); setErrorMsg(null); }}
                 keyboardType="email-address"
@@ -189,7 +189,7 @@ export default function SignupScreen() {
               <TextInput autoComplete="off" importantForAutofill="noExcludeDescendants" textContentType="none"
                 style={styles.input}
                 placeholder="Enter password"
-                placeholderTextColor="rgba(255,255,255,0.4)"
+                placeholderTextColor="#C7B8DF"
                 value={password}
                 onChangeText={(text) => { setPassword(text); setErrorMsg(null); }}
                 secureTextEntry={!showPassword}
@@ -224,7 +224,7 @@ export default function SignupScreen() {
               <TextInput autoComplete="off" importantForAutofill="noExcludeDescendants" textContentType="none"
                 style={styles.input}
                 placeholder="Display name"
-                placeholderTextColor="rgba(255,255,255,0.4)"
+                placeholderTextColor="#C7B8DF"
                 value={displayName}
                 onChangeText={(text) => { setDisplayName(text); setErrorMsg(null); }}
               />

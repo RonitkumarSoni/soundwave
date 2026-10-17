@@ -104,8 +104,9 @@ export class YoutubeAudioService {
     return request;
   }
     private async fetchRapidApiAudio(id: string, signal: AbortSignal, range?: string) {
-    const key = process.env.RAPIDAPI_KEY || '3d1e03cde9mshed1d6dbdc9d8136p1fb009jsn64712300c043';
+    const key = process.env.RAPIDAPI_KEY;
     const host = process.env.RAPIDAPI_HOST || 'youtube-mp36.p.rapidapi.com';
+    if (!key) throw new Error('RapidAPI is not configured');
     const res = await axios.get(`https://${host}/dl?id=${id}`, {
       headers: { 'x-rapidapi-key': key, 'x-rapidapi-host': host },
       timeout: 15000,

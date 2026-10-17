@@ -89,7 +89,8 @@ export default function LoginScreen() {
           <View style={[styles.inputContainer, errorMsg ? styles.inputErrorBorder : null]}>
             <TextInput autoComplete="off" importantForAutofill="noExcludeDescendants" textContentType="none"
               style={styles.input}
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholder="Enter your email"
+              placeholderTextColor="#C7B8DF"
               value={email}
               onChangeText={(text) => { setEmail(text); setErrorMsg(null); }}
               keyboardType="email-address"
@@ -101,7 +102,8 @@ export default function LoginScreen() {
           <View style={[styles.inputContainer, errorMsg ? styles.inputErrorBorder : null]}>
             <TextInput autoComplete="off" importantForAutofill="noExcludeDescendants" textContentType="none"
               style={styles.input}
-              placeholderTextColor="rgba(255,255,255,0.4)"
+              placeholder="Enter your password"
+              placeholderTextColor="#C7B8DF"
               value={password}
               onChangeText={(text) => { setPassword(text); setErrorMsg(null); }}
               secureTextEntry={!showPassword}

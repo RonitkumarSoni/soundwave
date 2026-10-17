@@ -1,9 +1,8 @@
 import { useAuthStore } from '@/stores/useAuthStore';
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Linking } from 'react-native';
+import React, { useCallback, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Toast from 'react-native-toast-message';
 import { auth } from '@/lib/firebase';
 import { reload } from 'firebase/auth';
 
@@ -13,41 +12,30 @@ import { LinearGradient } from 'expo-linear-gradient';
 export default function VerifyEmailScreen() {
   const router = useRouter();
   const email = auth.currentUser?.email || 'your email address';
+  const checking = useRef(false);
 
-  const handleOpenEmail = () => {
-    if (Platform.OS === 'web') {
-      // Trying to guess based on domain
-      if (email.includes('@gmail.com')) window.open('https://mail.google.com', '_blank');
-      else if (email.includes('@outlook.com') || email.includes('@hotmail.com')) window.open('https://outlook.live.com', '_blank');
-      else if (email.includes('@yahoo.com')) window.open('https://mail.yahoo.com', '_blank');
-      else window.open('https://mail.google.com', '_blank'); // fallback
-    } else {
-      Linking.openURL('message://').catch(() => {
-        Toast.show({ type: 'error', text1: 'Error', text2: 'Could not open email app.' });
-      });
-    }
-  };
-
-  const handleCheckVerification = async () => {
-    if (!auth.currentUser) return;
-
-    // We must reload the user to get the latest emailVerified status
+  const checkVerification = useCallback(async () => {
+    const user = auth.currentUser;
+    if (!user || checking.current) return;
+    checking.current = true;
     try {
-    await reload(auth.currentUser);
-
-    if (auth.currentUser.emailVerified) {
+      await reload(user);
+      if (!auth.currentUser?.emailVerified) return;
       await auth.currentUser.getIdToken(true);
       await useAuthStore.getState().syncUser(auth.currentUser);
       router.replace('/onboarding');
-    } else {
-      const msg = "Your email hasn't been verified yet. Please check your inbox and click the verification link.";
-      if (Platform.OS === 'web') alert(msg);
-      else Toast.show({ type: 'error', text1: 'Not Verified', text2: msg });
-    }
     } catch {
-      Toast.show({ type: "error", text1: "Verification check failed", text2: "Check your connection and retry." });
+      // Keep polling quietly; the verification link may still be opening.
+    } finally {
+      checking.current = false;
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    void checkVerification();
+    const interval = setInterval(() => void checkVerification(), 3000);
+    return () => clearInterval(interval);
+  }, [checkVerification]);
 
   return (
     <View style={styles.container}>
@@ -67,22 +55,7 @@ export default function VerifyEmailScreen() {
           We've sent a verification link to{'\n'}
           <Text style={styles.emailText}>{email}</Text>
         </Text>
-
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.primaryButton} onPress={handleOpenEmail}>
-            <LinearGradient
-              colors={[gradients.primary[0], gradients.primary[1]]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={StyleSheet.absoluteFill}
-            />
-            <Text style={styles.primaryButtonText}>Open Email App</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleCheckVerification}>
-            <Text style={styles.secondaryButtonText}>I've already verified</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.waitingText}>After verification, you&apos;ll continue automatically.</Text>
 
         <TouchableOpacity style={styles.resendButton} onPress={async () => { await useAuthStore.getState().logout(); router.replace('/(auth)/welcome'); }}>
           <Text style={styles.resendText}>Use a different account</Text>
@@ -129,34 +102,11 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
   },
-  buttonContainer: {
-    width: '100%',
-    gap: 16,
-    marginBottom: 32,
-  },
-  primaryButton: {
-    paddingVertical: 16,
-    borderRadius: 30,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  primaryButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    paddingVertical: 16,
-    borderRadius: 30,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
-  },
-  secondaryButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
+  waitingText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
   },
   resendButton: {
     padding: 16,

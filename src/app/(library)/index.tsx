@@ -295,7 +295,7 @@ export default function LibraryScreen() {
         )}
       </ScrollView>
 
-      <Modal visible={showCreateModal} transparent animationType="fade">
+      <Modal visible={showCreateModal} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>New Playlist</Text>
@@ -332,7 +332,7 @@ export default function LibraryScreen() {
       </Modal>
 
       {/* Options Modal */}
-      <Modal visible={!!optionsPlaylist && !showEditModal} transparent animationType="fade">
+      <Modal visible={!!optionsPlaylist && !showEditModal} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setOptionsPlaylist(null)}>
           <View style={[styles.modalContent, { marginTop: 'auto', marginBottom: insets.bottom + spacing.lg }]}>
             <Text style={styles.modalTitle}>{optionsPlaylist?.title}</Text>
@@ -358,7 +358,7 @@ export default function LibraryScreen() {
       </Modal>
 
       {/* Edit Modal */}
-      <Modal visible={showEditModal} transparent animationType="fade">
+      <Modal visible={showEditModal} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Playlist</Text>

@@ -1,9 +1,9 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {View,Text,StyleSheet,PanResponder,type PanResponderInstance} from 'react-native';
-interface Props {progress:number;currentTime:string;totalTime:string;onSeek:(value:number)=>void;}
+interface Props {progress:number;currentTime:string;totalTime:string;onSeek:(value:number)=>Promise<void>|void;}
 const clamp=(value:number)=>Math.max(0,Math.min(1,Number.isFinite(value)?value:0));
 export function SeekBar({progress,currentTime,totalTime,onSeek}:Props){
- const width=useRef(1),origin=useRef(0),position=useRef(0);
+ const width=useRef(1),origin=useRef(0),position=useRef(0),animationFrame=useRef<number|null>(null),seekVersion=useRef(0);
  const seek=useRef(onSeek);
  useEffect(()=>{seek.current=onSeek;},[onSeek]);
  const [drag,setDrag]=useState<number|null>(null);
@@ -14,13 +14,13 @@ export function SeekBar({progress,currentTime,totalTime,onSeek}:Props){
    if(cancelled)return;
    setResponder(PanResponder.create({
   onStartShouldSetPanResponder:()=>true,onMoveShouldSetPanResponder:()=>true,
-  onPanResponderGrant:event=>{origin.current=event.nativeEvent.pageX-event.nativeEvent.locationX;position.current=clamp(event.nativeEvent.locationX/width.current);setDrag(position.current);},
-  onPanResponderMove:(_,gesture)=>{position.current=clamp((gesture.moveX-origin.current)/width.current);setDrag(position.current);},
-  onPanResponderRelease:()=>{seek.current(position.current);setDrag(null);},
-  onPanResponderTerminate:()=>setDrag(null),onPanResponderTerminationRequest:()=>false,
+  onPanResponderGrant:event=>{++seekVersion.current;origin.current=event.nativeEvent.pageX-event.nativeEvent.locationX;position.current=clamp(event.nativeEvent.locationX/width.current);setDrag(position.current);},
+  onPanResponderMove:(_,gesture)=>{position.current=clamp((gesture.moveX-origin.current)/width.current);if(animationFrame.current===null)animationFrame.current=requestAnimationFrame(()=>{animationFrame.current=null;setDrag(position.current);});},
+  onPanResponderRelease:()=>{if(animationFrame.current!==null){cancelAnimationFrame(animationFrame.current);animationFrame.current=null;}const value=position.current;const version=++seekVersion.current;setDrag(value);void Promise.resolve(seek.current(value)).finally(()=>{if(seekVersion.current===version)setDrag(null);});},
+  onPanResponderTerminate:()=>{if(animationFrame.current!==null){cancelAnimationFrame(animationFrame.current);animationFrame.current=null;}++seekVersion.current;setDrag(null);},onPanResponderTerminationRequest:()=>false,
  }));
   });
-  return ()=>{cancelled=true;};
+  return ()=>{cancelled=true;if(animationFrame.current!==null)cancelAnimationFrame(animationFrame.current);};
  },[]);
  const value=drag??clamp(progress);
  const percent: `${number}%` = `${value * 100}%`;
@@ -34,4 +34,4 @@ export function SeekBar({progress,currentTime,totalTime,onSeek}:Props){
  </View><View style={styles.times}><Text style={styles.label}>{currentTime}</Text><Text style={styles.label}>{totalTime}</Text></View>
  </View>;
 }
-const styles=StyleSheet.create({container:{paddingHorizontal:28,marginVertical:12},touchArea:{height:44,justifyContent:'center'},track:{height:4,borderRadius:2,backgroundColor:'rgba(255,255,255,0.25)',overflow:'hidden'},fill:{height:4,backgroundColor:'#FFF',borderRadius:2},thumb:{position:'absolute',top:15,height:14,width:14,borderRadius:7,backgroundColor:'#FFF'},times:{flexDirection:'row',justifyContent:'space-between'},label:{fontSize:12,color:'rgba(255,255,255,0.72)',fontVariant:['tabular-nums']}});
+const styles=StyleSheet.create({container:{paddingHorizontal:28,marginVertical:12},touchArea:{height:52,justifyContent:'center'},track:{height:4,borderRadius:2,backgroundColor:'rgba(255,255,255,0.25)',overflow:'hidden'},fill:{height:4,backgroundColor:'#FFF',borderRadius:2},thumb:{position:'absolute',top:17,height:18,width:18,borderRadius:9,backgroundColor:'#FFF'},times:{flexDirection:'row',justifyContent:'space-between'},label:{fontSize:12,color:'rgba(255,255,255,0.72)',fontVariant:['tabular-nums']}});

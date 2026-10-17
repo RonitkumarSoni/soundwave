@@ -34,6 +34,8 @@ export function CustomDialog({
       transparent
       visible={visible}
       animationType="fade"
+      statusBarTranslucent
+      navigationBarTranslucent
       onRequestClose={onCancel}
     >
       <BlurView intensity={40} tint={theme.isDark ? 'dark' : 'light'} style={styles.overlay}>

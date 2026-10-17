@@ -53,8 +53,8 @@ export class SpotifyService {
   /**
    * Retrieves an access token using Client Credentials flow
    */
-  private async getAccessToken(): Promise<string> {
-    if (this.accessToken && Date.now() < this.tokenExpiresAt) {
+  private async getAccessToken(forceRefresh = false): Promise<string> {
+    if (!forceRefresh && this.accessToken && Date.now() < this.tokenExpiresAt) {
       return this.accessToken;
     }
 
@@ -80,12 +80,13 @@ export class SpotifyService {
       this.accessToken = response.data.access_token;
       // Expire 5 minutes early to be safe
       this.tokenExpiresAt =
-        Date.now() + (response.data.expires_in - 300) * 1000;
+        Date.now() + Math.max(response.data.expires_in - 300, 60) * 1000;
 
       this.logger.log('✅ Obtained new Spotify access token.');
       return this.accessToken || '';
-    } catch (error) {
-      this.logger.error('Failed to get Spotify access token', error);
+    } catch {
+      // Do not log provider errors: Axios can include authorization headers.
+      this.logger.error('Failed to get Spotify access token');
       throw new HttpException(
         'Spotify Authentication Failed',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -100,8 +101,7 @@ export class SpotifyService {
     endpoint: string,
     params: Record<string, string | number> = {},
   ): Promise<T> {
-    const token = await this.getAccessToken();
-    try {
+    const fetchWithToken = async (token: string) => {
       const { data } = await this.client.get<T>(endpoint, {
         params,
         headers: {
@@ -109,8 +109,25 @@ export class SpotifyService {
         },
       });
       return data;
+    };
+
+    try {
+      return await fetchWithToken(await this.getAccessToken());
     } catch (error) {
-      this.logger.error('Spotify API unavailable', error);
+      if (
+        axios.isAxiosError(error) &&
+        [401, 403].includes(error.response?.status || 0)
+      ) {
+        this.accessToken = null;
+        this.tokenExpiresAt = 0;
+        try {
+          return await fetchWithToken(await this.getAccessToken(true));
+        } catch {
+          // Fall through to the controlled service-unavailable response.
+        }
+      }
+      // Do not log the Axios error object because it can contain credentials.
+      this.logger.warn('Spotify API unavailable');
       throw new HttpException(
         'Spotify API unavailable',
         HttpStatus.BAD_GATEWAY,

@@ -483,7 +483,7 @@ export default function SettingsScreen() {
       </ScrollView>
 
       {/* Custom Dialog Modal */}
-      <Modal visible={showDeletePassword} transparent animationType="fade" onRequestClose={() => { if (!deleting) { setShowDeletePassword(false); setDeletePassword(''); } }}>
+      <Modal visible={showDeletePassword} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={() => { if (!deleting) { setShowDeletePassword(false); setDeletePassword(''); } }}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: alertTheme.background }]}>
             <Text style={[styles.modalTitle, { color: alertTheme.text }]}>Confirm account deletion</Text>
@@ -512,7 +512,7 @@ export default function SettingsScreen() {
       )}
 
       {/* Edit Profile Modal */}
-      <Modal visible={showEditProfile} transparent animationType="fade">
+      <Modal visible={showEditProfile} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Profile</Text>

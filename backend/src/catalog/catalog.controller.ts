@@ -214,8 +214,20 @@ export class CatalogController {
   @Get('autocomplete')
   async autocomplete(@Query('q') prefix: string) {
     if (!prefix) return { results: [] };
-    const res = await this.spotify.searchTracks(prefix, 10);
-    return { results: res.results.map((t) => ({ match: t.name })) };
+    const [spotify, gaana] = await Promise.allSettled([
+      this.spotify.searchTracks(prefix, 10),
+      this.gaana.searchTracks(prefix, 10),
+    ]);
+    const names = [
+      ...(spotify.status === 'fulfilled'
+        ? spotify.value.results.map((track) => track.name)
+        : []),
+      ...(gaana.status === 'fulfilled'
+        ? gaana.value.results.map((track) => track.name)
+        : []),
+    ];
+    const uniqueNames = [...new Set(names.filter(Boolean))].slice(0, 10);
+    return { results: uniqueNames.map((match) => ({ match })) };
   }
 
   /**

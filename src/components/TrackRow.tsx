@@ -1,7 +1,7 @@
 import { trackShareUrl } from '@/lib/share';
 import { Image } from 'expo-image';
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Share, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Share, ActivityIndicator, Platform, Keyboard } from 'react-native';
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -23,9 +23,10 @@ interface TrackRowProps {
   index: number;
   showDuration?: boolean;
   contextQueue?: Track[];
+  openPlayerOnPress?: boolean;
 }
 
-export function TrackRow({ track, index, showDuration = true, contextQueue }: TrackRowProps) {
+export function TrackRow({ track, index, showDuration = true, contextQueue, openPlayerOnPress = false }: TrackRowProps) {
   const setTrack = usePlayerStore((s) => s.setTrack);
   const setQueue = usePlayerStore((s) => s.setQueue);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -68,21 +69,31 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
     }
   };
 
+  const openNowPlaying = () => {
+    if (!openPlayerOnPress) return;
+    Keyboard.dismiss();
+    router.navigate('/player/now-playing');
+  };
+
   const handleRowPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isCurrentTrack) {
+      openNowPlaying();
       return;
     }
-    playTrack();
+    void playTrack();
+    openNowPlaying();
   };
 
   const handlePlayButtonPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isCurrentTrack) {
-      togglePlay();
+      if (!isAudioLoading) togglePlay();
+      openNowPlaying();
       return;
     }
-    playTrack();
+    void playTrack();
+    openNowPlaying();
   };
 
   const playTrack = async () => {
@@ -182,6 +193,8 @@ export function TrackRow({ track, index, showDuration = true, contextQueue }: Tr
         visible={isMenuVisible}
         animationType="slide"
         transparent={true}
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setMenuVisible(false)}
       >
         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />

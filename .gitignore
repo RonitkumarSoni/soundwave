@@ -47,6 +47,8 @@ backend/bin/
 .env.*
 !.env.example
 backend/firebase-service-account.json
+**/*firebase-adminsdk*.json
+backend/.env.render-private
 *.db
 *.db-shm
 *.db-wal

@@ -70,6 +70,8 @@ export function AddToPlaylistModal({ visible, onClose, track }: AddToPlaylistMod
       visible={visible}
       transparent
       animationType="slide"
+      statusBarTranslucent
+      navigationBarTranslucent
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView

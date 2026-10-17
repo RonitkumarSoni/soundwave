@@ -481,7 +481,7 @@ export default function SearchScreen() {
         confirmText="OK"
         showCancel={false}
       />}
-      <Modal visible={showSpotifyImport} transparent animationType="slide">
+      <Modal visible={showSpotifyImport} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent>
         <View style={styles.modalOverlay}>
           <BlurView intensity={100} tint="dark" style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -516,7 +516,7 @@ export default function SearchScreen() {
       </Modal>
 
       {/* Listening Modal */}
-      <Modal visible={isListening} transparent animationType="fade">
+      <Modal visible={isListening} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent>
         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <View style={{

@@ -43,6 +43,9 @@ export function normalizeYoutubeCookies(input: string): string {
     const path = fields[2] || '/';
     const flag2 = /^(TRUE|FALSE)$/i.test(fields[3]) ? fields[3].toUpperCase() : 'TRUE';
     const expiry = /^\d+$/.test(fields[4]) ? fields[4] : '0';
+    // Session cookies with an elapsed timestamp cannot authenticate a request.
+    if (expiry !== '0' && Number(expiry) < Math.floor(Date.now() / 1000))
+      continue;
     const name = fields[5];
     const value = fields.slice(6).join('\t');
 
@@ -72,11 +75,7 @@ export async function withYoutubeSession<T>(
   }
   if (!content) return run([], environment);
 
-  try {
-    content = normalizeYoutubeCookies(content);
-  } catch (normErr) {
-    // If normalization warns, content is still usable raw
-  }
+  content = normalizeYoutubeCookies(content);
   // yt-dlp may update its cookie jar. Copy the read-only Render secret into a
   // private, per-request file so parallel requests cannot overwrite each other.
   const directory = await mkdtemp(join(tmpdir(), 'soundwave-youtube-'));

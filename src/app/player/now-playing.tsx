@@ -443,7 +443,7 @@ export default function NowPlayingScreen() {
             progress={progress}
             currentTime={currentTime}
             totalTime={totalTime}
-            onSeek={value => { void seekGlobalAudio(value).catch(() => usePlayerStore.setState({ audioError: 'Seek unavailable' })); }}
+            onSeek={value => seekGlobalAudio(value).catch(() => { usePlayerStore.setState({ audioError: 'Seek unavailable' }); })}
           />
         </View>
 
@@ -530,6 +530,8 @@ export default function NowPlayingScreen() {
         visible={isQueueVisible}
         animationType="slide"
         transparent={true}
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setQueueVisible(false)}
       >
         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
@@ -588,6 +590,8 @@ export default function NowPlayingScreen() {
         visible={isPlaylistModalVisible}
         animationType="slide"
         transparent={true}
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setPlaylistModalVisible(false)}
       >
         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
@@ -634,6 +638,8 @@ export default function NowPlayingScreen() {
         visible={isSleepTimerModalVisible}
         animationType="slide"
         transparent={true}
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setSleepTimerModalVisible(false)}
       >
         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
@@ -685,6 +691,8 @@ export default function NowPlayingScreen() {
         visible={isLyricsModalVisible}
         animationType="slide"
         transparent={true}
+        statusBarTranslucent
+        navigationBarTranslucent
         onRequestClose={() => setLyricsModalVisible(false)}
       >
         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />

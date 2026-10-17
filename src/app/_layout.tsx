@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import React, { useState, useCallback } from "react";
-import { View, StyleSheet, Platform, Keyboard } from "react-native";
+import { View, StyleSheet, Platform, Keyboard, StatusBar as NativeStatusBar } from "react-native";
 import { api } from '@/lib/api';
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -195,6 +195,7 @@ export default function RootLayout() {
     <View style={styles.container}>
       {Platform.OS === 'web' && <style dangerouslySetInnerHTML={{ __html: globalCss }} />}
       <StatusBar style="light" />
+      {Platform.OS === 'android' && <NativeStatusBar backgroundColor="#170B2E" barStyle="light-content" />}
       <Stack
         screenOptions={{
           headerShown: false,
@@ -233,7 +234,7 @@ export default function RootLayout() {
           />
         </View>
       )}
-      <View pointerEvents="none" style={{position:"absolute",top:0,left:0,right:0,height:insets.top,backgroundColor:"#170B2E",zIndex:110}} />
+      {!isNowPlaying && <View pointerEvents="none" style={{position:"absolute",top:0,left:0,right:0,height:insets.top,backgroundColor:"#170B2E",zIndex:110}} />}
       {/* Global Toast Notification */}
       <Toast
         position="bottom"
